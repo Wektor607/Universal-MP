@@ -22,6 +22,12 @@ cd Universal-MP
 pip install -r requirements.txt
 ```
 
+## TODO 
+- [ ] summarize the experiment
+- [ ] remove all * in the library
+- [ ] submodule ogb, cora, tag and non-attribute graph
+- [ ] summarize the experiment 
+
 ## Usage
 
 ### Planetoid Datasets

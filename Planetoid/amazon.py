@@ -10,6 +10,7 @@ from torch_geometric.nn import MessagePassing, APPNP
 from torch_geometric.nn import GCNConv, SAGEConv
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from ogb.linkproppred import PygLinkPropPredDataset, Evaluator
+# TODO remove all *
 from utils import *
 from logger import Logger
 import os.path as osp
