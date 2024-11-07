@@ -30,7 +30,6 @@ def get_pos_neg_edges(split, split_edge, edge_index=None, num_nodes=None, neg_sa
                 num_nodes=num_nodes,
                 num_samples=pos_edge.size(0),
                 num_neg=num_neg)
-        #TODO check dense passage retrival 
     else:
         if 'edge' in split_edge['train']:
             neg_edge = split_edge[split]['edge_neg']

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-import ogb 
-from ogb.linkproppred import PygLinkPropPredDataset 
-from ogb.linkproppred import PygLinkPropPredDataset, Evaluator
+from ogb.linkproppred import PygLinkPropPredDataset
+from ogb.linkproppred import Evaluator
 import argparse
 import time
 import torch
@@ -23,7 +22,7 @@ def argument():
     parser.add_argument('--predictor', type=str, default='MLP')
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--loss_func', type=str, default='AUC')
-    parser.add_argument('--neg_sampler', type=str, default='global') #TODO change back global
+    parser.add_argument('--neg_sampler', type=str, default='global')
     parser.add_argument('--data_name', type=str, default='ogbl-collab')
     parser.add_argument('--data_path', type=str, default='~/dataset')
     parser.add_argument('--eval_metric', type=str, default='hits')
@@ -52,7 +51,7 @@ def argument():
     parser.add_argument('--train_node_emb', type=str2bool, default=True)
     parser.add_argument('--use_valedges_as_input', type=str2bool, default=False)
     parser.add_argument('--eval_last_best', type=str2bool, default=False)
-    parser.add_argument('--random_walk_augment', type=str2bool, default=True)
+    parser.add_argument('--random_walk_augment', type=str2bool, default=False)
     parser.add_argument('--alpha', type=float, default=0.5)
     parser.add_argument('--init', type=str, choices=['SGC', 'RWR', 'KI', 'Random'], default='KI')
     args = parser.parse_args()
@@ -133,7 +132,6 @@ def main():
         if args.use_valedges_as_input:
             full_edge_index = torch.cat([split_edge['valid']['edge'].t(), split_edge['train']['edge'].t()], dim=-1)
             full_edge_weight = torch.cat([split_edge['train']['weight'], split_edge['valid']['weight']], dim=-1)
-            
             # create adjacency matrix
             new_edges = to_undirected(full_edge_index, full_edge_weight, reduce='add')
             new_edge_index, new_edge_weight = new_edges[0], new_edges[1]
@@ -210,7 +208,6 @@ def main():
     if args.random_walk_augment:
         rw_row, rw_col, _ = data.adj_t.coo()
         if args.walk_start_type == 'edge':
-            # edge random walk = start from both source and target nodes 
             rw_start = torch.reshape(split_edge['train']['edge'], (-1,)).to(device)
         else:
             rw_start = torch.arange(0, num_nodes, dtype=torch.long).to(device)
@@ -221,7 +218,6 @@ def main():
 
         cur_lr = args.lr
         for epoch in range(1, 1 + args.epochs):
-            #  use random walk to generate adjacency matrix 
             if args.random_walk_augment:
                 walk = random_walk(rw_row, rw_col, rw_start, walk_length=args.walk_length)
                 pairs = []
@@ -229,14 +225,12 @@ def main():
                 for j in range(args.walk_length):
                     pairs.append(walk[:, [0, j + 1]])
                     weights.append(torch.ones((walk.size(0),), dtype=torch.float) / (j + 1))
-
                 pairs = torch.cat(pairs, dim=0)
                 weights = torch.cat(weights, dim=0)
                 # remove self-loop edges
                 mask = ((pairs[:, 0] - pairs[:, 1]) != 0)
                 split_edge['train']['edge'] = torch.masked_select(pairs, mask.view(-1, 1)).view(-1, 2)
                 split_edge['train']['weight'] = torch.masked_select(weights, mask)
-
 
             loss = model.train(data, split_edge,
                                batch_size=args.batch_size,

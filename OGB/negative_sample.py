@@ -12,7 +12,6 @@ def global_neg_sample(edge_index, num_nodes, num_samples,
     neg_src = neg_edge[0]
     neg_dst = neg_edge[1]
     if neg_edge.size(1) < num_samples * num_neg:
-        print(f"not enough neg samples..")
         k = num_samples * num_neg - neg_edge.size(1)
         rand_index = torch.randperm(neg_edge.size(1))[:k]
         neg_src = torch.cat((neg_src, neg_src[rand_index]))
@@ -29,27 +28,7 @@ def global_perm_neg_sample(edge_index, num_nodes, num_samples,
 
 
 def local_neg_sample(pos_edges, num_nodes, num_neg, random_src=False):
-    """
-    Generates negative samples based on the given positive edges. The negative samples 
-    are created by either randomly selecting a source node from the positive edges or 
-    using the same source nodes as in the positive edges, and then pairing them with 
-    randomly selected destination nodes.
-
-    Parameters:
-    pos_edges (torch.Tensor): A tensor of shape (num_edges, 2) representing the positive edges. 
-                              Each row corresponds to an edge with a source and destination node.
-    num_nodes (int): The total number of nodes in the graph. Used to sample random destination nodes.
-    num_neg (int): The number of negative edges to sample per positive edge.
-    random_src (bool): If True, randomly selects the source node from either the source or destination 
-                       of the positive edges. If False, uses the source node from the positive edge.
-
-    Returns:
-    torch.Tensor: A tensor of shape (num_edges, num_neg, 2), where each row represents a set of 
-                  negative edges corresponding to each positive edge.
-    """
-    # TODO this method could sample pos edges 
     if random_src:
-        # choose source 
         neg_src = pos_edges[torch.arange(pos_edges.size(0)), torch.randint(0, 2, (pos_edges.size(0),), dtype=torch.long)]
     else:
         neg_src = pos_edges[:, 0]

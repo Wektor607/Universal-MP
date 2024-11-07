@@ -1,7 +1,7 @@
 import argparse
 import csv
 import os
-
+import sys
 import numpy as np
 import scipy.sparse as ssp
 import torch
@@ -11,9 +11,14 @@ import time
 from matplotlib import pyplot as plt
 from yacs.config import CfgNode
 
-from utils.ogbdataset import loaddataset
 from sklearn.metrics import roc_auc_score
-from models.MLP import MLPPolynomialLP
+from graphgps.utils.ogbdataset import loaddataset
+from graphgps.utils.heuristic import AA, RA
+from graphgps.utils.heuristic import CN as CommonNeighbor
+from graphgps.models.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
+from yacs.config import CfgNode as CN
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 class EarlyStopping:
     def __init__(self, patience=5, verbose=False):

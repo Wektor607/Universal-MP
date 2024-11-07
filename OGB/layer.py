@@ -58,7 +58,6 @@ class HLGNN(MessagePassing):
             TEMP = TEMP / np.sum(np.abs(TEMP))
 
         self.temp = Parameter(torch.tensor(TEMP))
-        print(self.temp)
         # self.beta = Parameter(torch.zeros(3))
         
     def reset_parameters(self):

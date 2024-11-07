@@ -105,8 +105,6 @@ class BaseModel(object):
             input_feat = self.emb.weight
         return input_feat
 
-
-        
     def calculate_loss(self, pos_out, neg_out, num_neg, margin=None):
         if self.loss_func_name == 'CE':
             loss = ce_loss(pos_out, neg_out)
@@ -261,13 +259,6 @@ def create_gnn_layer(input_channels, hidden_channels, num_layers, dropout, encod
         return WSAGE(input_channels, hidden_channels, hidden_channels, num_layers, dropout)
     elif encoder_name.upper() == 'TRANSFORMER':
         return Transformer(input_channels, hidden_channels, hidden_channels, num_layers, dropout)
-    
-    # add some other graphtransformers
-    elif encoder_name.upper() == 'PEG':
-        pass 
-    elif encoder_name.upper() == 'NodeFormer':
-        pass 
-    
     else:
         return SAGE(input_channels, hidden_channels, hidden_channels, num_layers, dropout)
 

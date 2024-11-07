@@ -1,20 +1,43 @@
 import argparse
 import csv
 import os
-
+import sys
 import numpy as np
 import scipy.sparse as ssp
 import torch
 import torch.nn.functional as F
 import time
-
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from matplotlib import pyplot as plt
+from sklearn.metrics import roc_auc_score
 from yacs.config import CfgNode
 
-from utils.ogbdataset import loaddataset
-from utils.heuristic import CN, AA, RA
-from models.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
+from graphgps.utils.ogbdataset import loaddataset
+from graphgps.utils.heuristic import CN as CommonNeighbor
+from graphgps.utils.heuristic import AA, RA
+from graphgps.models.GNN import GAT_Variant, \
+                GCN_Variant, SAGE_Variant, GIN_Variant, \
+                GAE_forall, InnerProduct, mlp_score
+from yacs.config import CfgNode as CN  
 
+class EarlyStopping:
+    def __init__(self, patience=5, verbose=False):
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_loss = float('inf')
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if val_loss < self.best_loss:
+            self.best_loss = val_loss
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+                if self.verbose:
+                    print("Early stopping triggered!")
 
 def create_GAE_model(cfg_model: CN,
                      cfg_score: CN,
@@ -78,8 +101,8 @@ def train(model, optimizer, data, splits, device, epoch):
     neg_edge_index = splits['train']['neg_edge_label_index'].to(device)
 
     # Labels for positive and negative edges (continuous regression labels)
-    pos_edge_label = splits['train']['pos_edge_score'].to(device)
-    neg_edge_label = splits['train']['neg_edge_score'].to(device)
+    pos_edge_label = splits['train']['pos_edge_label'].to(device)
+    neg_edge_label = splits['train']['neg_edge_label'].to(device)
 
     # Forward pass
     z = model.encode(data.x, data.edge_index)
@@ -94,12 +117,18 @@ def train(model, optimizer, data, splits, device, epoch):
     loss = pos_loss + neg_loss
     loss.backward()
 
+    all_preds = torch.cat([pos_pred, neg_pred], dim=0)
+    all_labels = torch.cat([torch.ones(pos_pred.size(0)), torch.zeros(neg_pred.size(0))], dim=0).to(device)
+
+    # Compute AUC
+    auc = roc_auc_score(all_labels.cpu().detach().numpy(), all_preds.cpu().detach().numpy())
+
     # Optimizer step
     optimizer.step()
     visualize(pos_pred, pos_edge_label, save_path='./visualization_pos_train.png')
     visualize(neg_pred, neg_edge_label, save_path='./visualization_neg_train.png')
 
-    return loss.item()
+    return auc
 
 
 
@@ -112,8 +141,8 @@ def valid(model, data, splits, device, epoch):
     neg_edge_index = splits['valid']['neg_edge_label_index'].to(device)
 
     # Labels for positive and negative edges (continuous regression labels)
-    pos_edge_label = splits['valid']['pos_edge_score'].to(device)
-    neg_edge_label = splits['valid']['neg_edge_score'].to(device)
+    pos_edge_label = splits['valid']['pos_edge_label'].to(device)
+    neg_edge_label = splits['valid']['neg_edge_label'].to(device)
 
     # Forward pass
     z = model.encode(data.x, data.edge_index)
@@ -123,12 +152,12 @@ def valid(model, data, splits, device, epoch):
     neg_pred = model.decode(z[neg_edge_index[0]], z[neg_edge_index[1]])
 
     # Compute regression loss (MSE)
-    pos_loss = F.mse_loss(pos_pred, pos_edge_label)
-    neg_loss = F.mse_loss(neg_pred, neg_edge_label)
-    loss = pos_loss + neg_loss
+    all_preds = torch.cat([pos_pred, neg_pred], dim=0)
+    all_labels = torch.cat([torch.ones(pos_pred.size(0)), torch.zeros(neg_pred.size(0))], dim=0).to(device)
 
-
-    return loss.item()
+    # Compute AUC
+    auc = roc_auc_score(all_labels.cpu().detach().numpy(), all_preds.cpu().detach().numpy())
+    return auc
 
 
 @torch.no_grad()
@@ -140,8 +169,8 @@ def test(model, data, splits, device):
     neg_edge_index = splits['test']['neg_edge_label_index'].to(device)
 
     # Labels for positive and negative edges (continuous regression labels)
-    pos_edge_label = splits['test']['pos_edge_score'].to(device)
-    neg_edge_label = splits['test']['neg_edge_score'].to(device)
+    pos_edge_label = splits['test']['pos_edge_label'].to(device)
+    neg_edge_label = splits['test']['neg_edge_label'].to(device)
 
     # Forward pass
     z = model.encode(data.x, data.edge_index)
@@ -152,22 +181,23 @@ def test(model, data, splits, device):
     visualize(pos_pred, pos_edge_label, save_path = './visualization_pos.png')
     visualize(neg_pred, neg_edge_label, save_path = './visualization_neg.png')
 
-    # Compute regression loss (MSE)
-    pos_loss = F.mse_loss(pos_pred, pos_edge_label)
-    neg_loss = F.mse_loss(neg_pred, neg_edge_label)
-    loss = pos_loss + neg_loss
+    all_preds = torch.cat([pos_pred, neg_pred], dim=0)
+    all_labels = torch.cat([torch.ones(pos_pred.size(0)), torch.zeros(neg_pred.size(0))], dim=0).to(device)
 
-    return loss.item()
+    # Compute AUC
+    auc = roc_auc_score(all_labels.cpu().detach().numpy(), all_preds.cpu().detach().numpy())
+
+    return auc
 
 
-def save_to_csv(file_path, model_name, heuristic, test_loss):
+def save_to_csv(file_path, model_name, test_auc):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     file_exists = os.path.isfile(file_path)
     with open(file_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         if not file_exists:
-            writer.writerow(['Model', 'Heuristic', 'Test_Loss'])
-        writer.writerow([model_name, heuristic, test_loss])
+            writer.writerow(['Model', 'Test_AUC'])
+        writer.writerow([model_name, test_auc])
 def visualize(pred, true_label, save_path = './visualization.png'):
 
     pred = pred.cpu().detach().numpy()
@@ -190,13 +220,12 @@ def visualize(pred, true_label, save_path = './visualization.png'):
 
 def parseargs():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=30, help="number of epochs")
-    parser.add_argument('--dataset', type=str, default="Cora")
+    parser.add_argument('--epochs', type=int, default=1000, help="number of epochs")
+    parser.add_argument('--dataset', type=str, default="Citeseer")
     parser.add_argument('--batch_size', type=int, default=512, help="batch size")
-    parser.add_argument('--heuristic', type=str, default="AA")
     parser.add_argument('--gnn', type=str, default="gcn")
     parser.add_argument('--model', type=str, default="GIN_Variant")
-    parser.add_argument('--use_feature', type=bool, default=False)
+    parser.add_argument('--use_early_stopping', type=bool, default=True)
     args = parser.parse_args()
     return args
 
@@ -206,13 +235,13 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data, splits = loaddataset(args.dataset, True)
     data = data.to(device)
+    
     with open('./yamls/cora/heart_gnn_models.yaml', "r") as f:
         cfg = CfgNode.load_cfg(f)
+        
     cfg_model = eval(f'cfg.model.{args.model}')
-    if not hasattr(splits['train'], 'x') or splits['train'].x is None:
-        cfg_model.in_channels = 1024
-    else:
-        cfg_model.in_channels = data.num_nodes
+    cfg_model.in_channels = splits['train']['x'].size(1)
+    
     cfg_score = eval(f'cfg.score.{args.model}')
     cfg.model.type = args.model
     edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
@@ -220,30 +249,30 @@ if __name__ == "__main__":
         (edge_weight, (data.edge_index[0].cpu(), data.edge_index[1].cpu())),
         shape=(data.num_nodes, data.num_nodes)
     )
+    
     method_dict = {
-        "CN": CN,
+        "CN": CommonNeighbor,
         "AA": AA,
         "RA": RA
     }
-    for split in splits:
-        pos_edge_score, _ = method_dict[args.heuristic](A, splits[split]['pos_edge_label_index'],
-                                                        batch_size=args.batch_size)
-        neg_edge_score, _ = method_dict[args.heuristic](A, splits[split]['neg_edge_label_index'],
-                                                        batch_size=args.batch_size)
-        splits[split]['pos_edge_score'] = torch.sigmoid(pos_edge_score)
-        splits[split]['neg_edge_score'] = torch.sigmoid(neg_edge_score)
-    if not args.use_feature:
-        A_dense = A.toarray()
-        A_tensor = torch.tensor(A_dense)
-        data.x = A_tensor.float().to(device)
 
     model = create_GAE_model(cfg_model, cfg_score, args.model).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    early_stopping = EarlyStopping(patience=20, verbose=True)
+    
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        loss = train(model, optimizer, data, splits, device, args.batch_size)
-        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
-    test_loss = test(model, data, splits, device)
-    save_to_csv(f'./results/test_results_{args.dataset}.csv', args.model, args.heuristic, test_loss)
+        auc = train(model, optimizer, data, splits, device, A)
+        print(f'Epoch: {epoch:03d}, AUC: {auc:.4f}')
+        val_auc = valid(model, data, splits, device, A)
+        print(f'Validation AUC: {val_auc:.4f}')
+        if args.use_early_stopping:
+            early_stopping(val_auc)
+            if early_stopping.early_stop:
+                print("Training stopped early!")
+                break
+            
+    test_auc = test(model, data, splits, device)
+    print(f'Test Result: AUC: {test_auc:.4f}')
+    save_to_csv(f'./results/lp_results_{args.dataset}.csv', args.model, test_auc)
     print(f'Saved results.')
-

@@ -1,24 +1,24 @@
 # Heuristic Learning Graph Neural Network (HL-GNN)
 
-This repository contains the official implementation of HL-GNN, as presented in the paper ["Heuristic Learning with Graph Neural Networks: A Unified Framework for Link Prediction,"](https://arxiv.org/pdf/2406.07979) accepted at KDD 2024.
+This repository contains the official implementation of Universal-MPNN, as presented in the paper [""]().
 
 ## Overview
 
-HL-GNN is a novel method for link prediction that unifies local and global heuristics into a matrix formulation and implements it efficiently using graph neural networks. HL-GNN is simpler than GCN and can effectively reach up to 20 layers. It demonstrates effectiveness in link prediction tasks and scales well to large OGB datasets. Notably, HL-GNN requires only a few parameters for training (excluding the predictor) and is significantly faster than existing methods.
+HL-GNN is a novel method for link prediction that .... It demonstrates effectiveness in link prediction tasks and scales well to large OGB datasets. Notably, HL-GNN requires only a few parameters for training (excluding the predictor) and is significantly ...
 
 <div align=center>
-    <img src="/HL-GNN.png" alt="HL-GNN" width="60%" height="60%">
+    <img src="/..png" alt="HL-GNN" width="60%" height="60%">
 </div>
 
-For more details, please refer to the [paper](https://arxiv.org/pdf/2406.07979).
+For more details, please refer to the []().
 
 ## Installation
 
 Clone the repository and install the necessary dependencies:
 
 ```bash
-git clone https://github.com/LARS-research/HL-GNN.git
-cd HL-GNN
+git clone https://github.com/ChenS676/Universal-MP
+cd Universal-MP
 pip install -r requirements.txt
 ```
 
@@ -100,11 +100,12 @@ The performance of HL-GNN on various datasets is summarized in the table below. 
 |         |   Cora    | Citeseer  |  Pubmed   |   Photo   | Computers |  collab   |    ddi    |    ppa    | citation2 |
 | :-----: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: | :-------: |
 | Method  | Hits@100  | Hits@100  | Hits@100  |    AUC    |    AUC    |  Hits@50  |  Hits@20  | Hits@100  |    MRR    |
-|  SEAL   |   81.71   |   83.89   |  *75.54*  |   98.85   |  *98.70*  |   64.74   |   30.56   |   48.80   |  *87.67*  |
-| NBFNet  |   71.65   |   74.07   |   58.73   |   98.29   |   98.03   |    OOM    |   4.00    |    OOM    |    OOM    |
-| Neo-GNN |   80.42   |   84.67   |   73.93   |   98.74   |   98.27   |   62.13   |   63.57   |   49.13   |   87.26   |
-|  BUDDY  |  *88.00*  |  *92.93*  |   74.10   |  *99.05*  |   98.69   |  *65.94*  |  *78.51*  |  *49.85*  |   87.56   |
-| HL-GNN  | **94.22** | **94.31** | **88.15** | **99.11** | **98.82** | **68.11** | **80.27** | **56.77** | **89.43** |
+|  SEAL   |           |           |           |           |           |           |           |           |           |
+| NBFNet  |           |           |           |           |           |           |           |           |           |
+| Neo-GNN |           |           |           |           |           |           |           |           |           |
+|  BUDDY  |           |           |           |           |           |           |           |           |           |
+| HL-GNN  |           |           |           |           |           |           |           |           |           |
+
 
 ## Acknowledgement
 
@@ -115,12 +116,6 @@ We sincerely thank the [PLNLP repository](https://github.com/zhitao-wang/PLNLP) 
 If you find HL-GNN useful in your research, please cite our paper:
 
 ```bibtex
-@inproceedings{zhang2024heuristic,
-  title={Heuristic Learning with Graph Neural Networks: A Unified Framework for Link Prediction},
-  author={Zhang, Juzheng and Wei, Lanning and Xu, Zhen and Yao, Quanming},
-  booktitle={Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
-  year={2024}
-}
 ```
 
 Feel free to reach out if you have any questions!

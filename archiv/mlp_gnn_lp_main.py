@@ -1,21 +1,21 @@
 import argparse
 import csv
 import os
-
+import sys
 import numpy as np
 import scipy.sparse as ssp
 import torch
 import torch.nn.functional as F
 import time
-
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from matplotlib import pyplot as plt
 from sklearn.metrics import roc_auc_score
 from yacs.config import CfgNode
 
-from models.MLP import MLPPolynomialFeatures
-from utils.ogbdataset import loaddataset
-from utils.heuristic import CN, AA, RA
-from models.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
+from graphgps.models.MLP import MLPPolynomialFeatures
+from graphgps.utils.ogbdataset import loaddataset
+from graphgps.utils.heuristic import CN, AA, RA
+from graphgps.models.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 
 class EarlyStopping:
     def __init__(self, patience=5, verbose=False):
@@ -152,8 +152,6 @@ def valid(model, data, splits, device, epoch):
 
     # Compute AUC
     auc = roc_auc_score(all_labels.cpu().detach().numpy(), all_preds.cpu().detach().numpy())
-
-
     return auc
 
 
@@ -175,8 +173,6 @@ def test(model, data, splits, device):
     # Predict scores for both positive and negative edges
     pos_pred = model.decode(pos_edge_index[0], pos_edge_index[1], z[pos_edge_index[0]], z[pos_edge_index[1]])
     neg_pred = model.decode(neg_edge_index[0], neg_edge_index[1], z[pos_edge_index[0]], z[pos_edge_index[1]])
-
-
 
     all_preds = torch.cat([pos_pred, neg_pred], dim=0)
     all_labels = torch.cat([torch.ones(pos_pred.size(0)), torch.zeros(neg_pred.size(0))], dim=0).to(device)
