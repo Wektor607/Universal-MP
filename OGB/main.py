@@ -24,7 +24,7 @@ def argument():
     parser.add_argument('--loss_func', type=str, default='AUC')
     parser.add_argument('--neg_sampler', type=str, default='global')
     parser.add_argument('--data_name', type=str, default='ogbl-collab')
-    parser.add_argument('--data_path', type=str, default='~/dataset')
+    parser.add_argument('--data_path', type=str, default='/hkfs/work/workspace/scratch/cc7738-subgraph_training/Universal-MP/dataset') 
     parser.add_argument('--eval_metric', type=str, default='hits')
     parser.add_argument('--walk_start_type', type=str, default='edge')
     parser.add_argument('--res_dir', type=str, default='log')
@@ -102,6 +102,8 @@ def main():
     # create log file and save args
     log_file_name = 'log_' + args.data_name + '_' + str(int(time.time())) + '.txt'
     log_file = os.path.join(args.res_dir, log_file_name)
+    if not os.path.exists(args.res_dir):
+        os.makedirs(args.res_dir)
     with open(log_file, 'a') as f:
         f.write(str(args) + '\n')
 
