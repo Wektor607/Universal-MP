@@ -11,12 +11,14 @@ import sys
 from matplotlib import pyplot as plt
 from yacs.config import CfgNode
 
-from graphgps.utils.ogbdataset import loaddataset
+
 from sklearn.metrics import roc_auc_score
-from graphgps.models.MLP import MLPPolynomialFeatures
-from graphgps.utils.heuristic import AA, RA
-from graphgps.utils.heuristic import CN as CommonNeighbor
-from graphgps.models.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
+
+from baselines.MLP import MLPPolynomialFeatures
+from baselines.utils import loaddataset
+from baselines.heuristic import CN, AA, RA
+from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
+
 from yacs.config import CfgNode as CN
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

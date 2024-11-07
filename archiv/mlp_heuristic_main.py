@@ -11,10 +11,13 @@ import time
 from matplotlib import pyplot as plt
 from yacs.config import CfgNode
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from graphgps.utils.ogbdataset import loaddataset
-from sklearn.metrics import roc_auc_score
-from graphgps.models.MLP import MLPPolynomialFeatures
 
+from sklearn.metrics import roc_auc_score
+
+from baselines.MLP import MLPPolynomialFeatures
+from baselines.utils import loaddataset
+from baselines.heuristic import CN, AA, RA
+from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 
 class EarlyStopping:
     def __init__(self, patience=5, verbose=False):
