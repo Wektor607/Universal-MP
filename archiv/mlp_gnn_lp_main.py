@@ -16,25 +16,7 @@ from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import CN, AA, RA
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
-
-class EarlyStopping:
-    def __init__(self, patience=5, verbose=False):
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_loss = float('inf')
-        self.early_stop = False
-
-    def __call__(self, val_loss):
-        if val_loss < self.best_loss:
-            self.best_loss = val_loss
-            self.counter = 0
-        else:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-                if self.verbose:
-                    print("Early stopping triggered!")
+from archiv.mlp_heuristic_main import EarlyStopping
 
 def create_GAE_model(cfg_model: CN,
                      in_channels,

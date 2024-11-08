@@ -19,6 +19,7 @@ from baselines.utils import loaddataset
 from baselines.heuristic import CN, AA, RA
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 
+
 class EarlyStopping:
     def __init__(self, patience=5, verbose=False):
         self.patience = patience
@@ -37,6 +38,7 @@ class EarlyStopping:
                 self.early_stop = True
                 if self.verbose:
                     print("Early stopping triggered!")
+                    
 def train(model, optimizer, data, splits, device, A, batch_size=512):
     model.train()
     optimizer.zero_grad()

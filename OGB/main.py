@@ -152,7 +152,6 @@ def main():
             deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
             split_edge['train']['weight'] = deg_inv_sqrt[full_edge_index[0]] * full_edge_weight * deg_inv_sqrt[full_edge_index[1]]
 
-
     data = data.to(device)
 
     if args.encoder.upper() == 'GCN' or args.encoder.upper() == 'SAGE':

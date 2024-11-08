@@ -43,15 +43,15 @@ model:
     hidden_channels: 32
     out_channels: 32
     negative_slope: 0.1
-    dropout: 0.1
-    num_layers: 1
+    dropout: 0
+    num_layers: 2
 
   GAT_Variant:
     heads: 4
     hidden_channels: 32
     negative_slope: 0.1
-    dropout: 0.1
-    num_layers: 1
+    dropout: 0
+    num_layers: 2
     emb: False
     in_channels: None
     out_channels: 32
@@ -60,17 +60,25 @@ model:
     in_channels: None
     hidden_channels: 64
     out_channels: 128
-    num_layers: 1
-    dropout: 0.1
+    num_layers: 2
+    dropout: 0
     emb: False
 
   GIN_Variant:
     out_channels: 64
     hidden_channels: 64
-    dropout: 0.1
+    dropout: 0
     emb: False
-    num_layers: 1
+    num_layers: 2
     mlp_layer: 1
+
+  LINKX:
+    
+    hidden_channels: 16         
+    out_channels: 1            
+    num_layers: 1           
+    num_edge_layers: 1         
+    num_node_layers: 1       
 
 sampler:
   type: gsaint
@@ -92,7 +100,7 @@ score:
     score_gin_mlp_layer: 2
     score_cat_node_feat_mf: False
     score_cat_n2v_feat: False
-    score_num_layers: 3
+    score_num_layers: 2
     product: dot
 
   GCN_Variant:
@@ -104,7 +112,7 @@ score:
     score_gin_mlp_layer: 2
     score_cat_node_feat_mf: False
     score_cat_n2v_feat: False
-    score_num_layers: 3
+    score_num_layers: 2
     product: inner
 
 
@@ -117,7 +125,7 @@ score:
     score_gin_mlp_layer: 2
     score_cat_node_feat_mf: False
     score_cat_n2v_feat: False
-    score_num_layers: 3
+    score_num_layers: 2
     product: dot
 
   SAGE_Variant:
@@ -129,9 +137,20 @@ score:
     score_gin_mlp_layer: 2
     score_cat_node_feat_mf: False
     score_cat_n2v_feat: False
-    score_num_layers: 3
+    score_num_layers: 2
     product: dot
 
+  LINKX:
+    score_in_channels: 64
+    score_hidden_channels: 64
+    score_num_layers_predictor: 3
+    score_dropout: 0.1
+    score_out_channels: 1
+    score_gin_mlp_layer: 2
+    score_cat_node_feat_mf: False
+    score_cat_n2v_feat: False
+    score_num_layers: 2
+    product: dot
 
 num_threads: 11
 

@@ -10,6 +10,18 @@ from torch_geometric.nn.models import MLP
 from torch_geometric.typing import Adj, OptTensor
 from torch_geometric.utils import spmm
 
+import math
+
+import torch
+from torch import Tensor
+from torch.nn import BatchNorm1d, Parameter
+
+from torch_geometric.nn import inits
+from torch_geometric.nn.conv import MessagePassing
+from torch_geometric.nn.models import MLP
+from torch_geometric.typing import Adj, OptTensor
+from torch_geometric.utils import spmm
+
 
 class SparseLinear(MessagePassing):
     def __init__(self, in_channels: int, out_channels: int, bias: bool = True):
@@ -52,7 +64,6 @@ class SparseLinear(MessagePassing):
 
     def message_and_aggregate(self, adj_t: Adj, weight: Tensor) -> Tensor:
         return spmm(adj_t, weight, reduce=self.aggr)
-
 
 class LINKX(torch.nn.Module):
     r"""The LINKX model from the `"Large Scale Learning on Non-Homophilous

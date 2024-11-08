@@ -17,29 +17,11 @@ from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import CN, AA, RA
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
-
+from baselines.MLP import MLPPolynomialLP
 from yacs.config import CfgNode as CN
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from archiv.mlp_heuristic_main import EarlyStopping
 
-
-class EarlyStopping:
-    def __init__(self, patience=5, verbose=False):
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_loss = float('inf')
-        self.early_stop = False
-
-    def __call__(self, val_loss):
-        if val_loss < self.best_loss:
-            self.best_loss = val_loss
-            self.counter = 0
-        else:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-                if self.verbose:
-                    print("Early stopping triggered!")
 def train(model, optimizer, data, splits, device, A):
     model.train()
     optimizer.zero_grad()
@@ -95,6 +77,7 @@ def valid(model, data, splits, device, A):
     auc = roc_auc_score(all_labels.cpu().detach().numpy(), all_preds.cpu().detach().numpy())
 
     return auc
+
 @torch.no_grad()
 def test(model, data, splits, device, A):
     model.eval()
