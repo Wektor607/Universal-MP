@@ -152,8 +152,8 @@ def visualize(pred, true_label, save_path = './visualization.png'):
     pred = pred.cpu().detach().numpy()
     true_label = true_label.cpu().detach().numpy()
     plt.figure(figsize=(10, 6))
-    plt.scatter(np.arange(len(true_label)), true_label, color='blue', label='True Score', alpha=0.6)
-    plt.scatter(np.arange(len(pred)), pred, color='red', label='Prediction', alpha=0.6)
+    plt.scatter(np.arange(len(true_label)), true_label, color='#A6CEE3', label='True Score', alpha=0.6)
+    plt.scatter(np.arange(len(pred)), pred, color='#B2DF8A', label='Prediction', alpha=0.6)
 
     plt.title('Predictions vs True Score')
     plt.xlabel('Sample Index')
@@ -225,59 +225,38 @@ def experiment_loop(args: Config, num_experiments=5):
         splits[split]['neg_edge_score'] = torch.sigmoid(neg_edge_score)
 
     # Store results of each experiment
-    experiment_losses = []
-    for experiment in range(num_experiments):
-        early_stopping = EarlyStopping(patience=5, verbose=True)
+    early_stopping = EarlyStopping(patience=5, verbose=True)
 
-        if args.model == 'LINKX':
-            cfg_model.in_channels = data.x.size(-1)  
-            cfg_model.num_nodes = data.num_nodes
-            model = create_LINKX(cfg_model, cfg_score, 'LINKX').to(device)
-        
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
-        for epoch in range(1, args.epochs + 1):
-            start = time.time()
-            train_loss = train(model, optimizer, data, splits, device, 'train')
-            
-            # Validate every 20 epochs
-            if epoch % 20 == 0:
-                valid_loss = train(model, optimizer, data, splits, device, 'valid')
-                print(f'Epoch: {epoch:03d}, train loss: {train_loss:.4f}, valid loss: {valid_loss:.4f}, Cost Time: {time.time() - start:.4f}s')
-
-                if args.use_early_stopping:
-                    early_stopping(valid_loss)
-                    if early_stopping.early_stop:
-                        print("Training stopped early!")
-                        break
-
-        test_loss = test(model, data, splits, device)
-        experiment_losses.append(test_loss)
-        print(f'Experiment {experiment + 1}/{num_experiments} - Test Loss: {test_loss:.4f}')
-
-    # Calculate mean and variance of test losses
-    mean_loss = np.mean(experiment_losses)
-    variance_loss = np.var(experiment_losses)
-    print(f'Mean Test Loss: {mean_loss:.4f}, Variance: {variance_loss:.4f}')
+    if args.model == 'LINKX':
+        cfg_model.in_channels = data.x.size(-1)  
+        cfg_model.num_nodes = data.num_nodes
+        model = create_LINKX(cfg_model, cfg_score, 'LINKX').to(device)
     
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    for epoch in range(1, args.epochs + 1):
+        start = time.time()
+        train_loss = train(model, optimizer, data, splits, device, 'train')
+        
+        # Validate every 20 epochs
+        if epoch % 20 == 0:
+            valid_loss = train(model, optimizer, data, splits, device, 'valid')
+            print(f'Epoch: {epoch:03d}, train loss: {train_loss:.4f}, valid loss: {valid_loss:.4f}, Cost Time: {time.time() - start:.4f}s')
+
+            if args.use_early_stopping:
+                early_stopping(valid_loss)
+                if early_stopping.early_stop:
+                    print("Training stopped early!")
+                    break
+
+    test_loss = test(model, data, splits, device)
+
     # Save results to CSV with mean and variance
-    file_path = f'./results/test_results_{args.dataset}.csv'
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    file_exists = os.path.isfile(file_path)
-    
-    with open(file_path, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        if not file_exists:
-            # Write header only if file does not exist
-            writer.writerow(['Model', 'NodeFeat', 'Heuristic', 'Test_Loss', 'Mean_Loss', 'Variance_Loss'])
-        
-        writer.writerow([
-            args.model, 
-            args.node_feature, 
-            args.heuristic, 
-            round(mean_loss, 4),
-            round(variance_loss, 4)
-        ])
+    save_to_csv(f'./results/LINKX2CN_{args.dataset}.csv', 
+                args.model, 
+                args.node_feature, 
+                args.heuristic, 
+                test_loss)
     
     print(f'Saved mean and variance of test loss to CSV.')
 
@@ -290,5 +269,5 @@ if __name__ == "__main__":
         args.model = model
         for node_feature in ['original', 'one-hot', 'random', 'adjacency']:
             args.node_feature = node_feature
-        
-            experiment_loop(args)
+            for i in range(3):
+                experiment_loop(args)

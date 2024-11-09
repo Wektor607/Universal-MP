@@ -178,8 +178,8 @@ def visualize(pred, true_label, save_path = './visualization.png'):
     pred = pred.cpu().detach().numpy()
     true_label = true_label.cpu().detach().numpy()
     plt.figure(figsize=(10, 6))
-    plt.scatter(np.arange(len(true_label)), true_label, color='blue', label='True Score', alpha=0.6)
-    plt.scatter(np.arange(len(pred)), pred, color='red', label='Prediction', alpha=0.6)
+    plt.scatter(np.arange(len(true_label)), true_label, color='#A6CEE3', label='True Score', alpha=0.6)
+    plt.scatter(np.arange(len(pred)), pred, color='#B2DF8A', label='Prediction', alpha=0.6)
 
     plt.title('Predictions vs True Score')
     plt.xlabel('Sample Index')

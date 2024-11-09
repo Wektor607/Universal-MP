@@ -180,8 +180,8 @@ def visualize(pred, true_label, save_path = './visualization.png'):
     pred = pred.cpu().detach().numpy()
     true_label = true_label.cpu().detach().numpy()
     plt.figure(figsize=(10, 6))
-    plt.scatter(np.arange(len(true_label)), true_label, color='blue', label='True Score', alpha=0.6)
-    plt.scatter(np.arange(len(pred)), pred, color='red', label='Prediction', alpha=0.6)
+    plt.scatter(np.arange(len(true_label)), true_label, color='#A6CEE3', label='True Score', alpha=0.6)
+    plt.scatter(np.arange(len(pred)), pred, color='#B2DF8A', label='Prediction', alpha=0.6)
 
     plt.title('Predictions vs True Score')
     plt.xlabel('Sample Index')
@@ -271,19 +271,20 @@ def experiment_loop(args: Config):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        loss = train(model, optimizer, data, splits, device, args.batch_size)
-        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Cost Time: {time.time() - start:.4f}s')
+        train_loss = train(model, optimizer, data, splits, device, args.batch_size)
+        print(f'Epoch: {epoch:03d}, Loss: {train_loss:.4f}, Cost Time: {time.time() - start:.4f}s')
 
-        print(f'Train Loss: {loss:.4f}')
+        valid_loss = valid(model, data, splits, device, epoch)
+        print(f'Train Loss: {valid_loss:.4f}')
         if args.use_early_stopping:
-            early_stopping(loss)
+            early_stopping(valid_loss)
             if early_stopping.early_stop:
                 print("Training stopped early!")
                 break
             
     test_loss = test(model, data, splits, device)
     
-    save_to_csv(f'./results/test_results_{args.dataset}.csv', 
+    save_to_csv(f'./results/gcn4cn_{args.dataset}.csv', 
                 args.model, 
                 args.node_feature, 
                 args.heuristic, 
@@ -298,5 +299,6 @@ if __name__ == "__main__":
         args.model = model
         for node_feature in ['original', 'adjacency', 'one-hot', 'random']:
             args.node_feature = node_feature
-        
-            experiment_loop(args)
+            
+            for i in range(5):
+                experiment_loop(args)
