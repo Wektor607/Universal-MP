@@ -19,6 +19,7 @@ from baselines.heuristic import CN, AA, RA
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 from archiv.mlp_heuristic_main import EarlyStopping
 from utils import  EarlyStopping, visualize
+from baselines.heuristic import CN as CommonNeighbor
 
 class NNet(nn.Module):
 
@@ -264,10 +265,82 @@ def experiment_loop():
                 break
         print(f'Time taken: {time.time() - start:.2f}s')
         
-    test_auc. loss = test(model, data, splits, device, A)
+    test_auc = test(model, data, splits, device, A)
     print(f'Test Result: AUC: {test_auc:.4f}')
     save_to_csv(f'./results/lp_results_{args.dataset}.csv', args.model, args.use_nodefeat, args.node_feature, test_auc)
     print(f'Saved results.')
+
+
+def experiment_loop_cn():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    data, splits = loaddataset(args.dataset, True)
+    data = data.to(device)
+    edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
+    A = ssp.csr_matrix(
+        (edge_weight, (data.edge_index[0].cpu(), data.edge_index[1].cpu())),
+        shape=(data.num_nodes, data.num_nodes)
+    )
+    
+    if args.use_nodefeat:
+        if args.node_feature == 'one-hot':
+            data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
+        elif args.node_feature == 'random':
+            dim_feat = data.x.size(1)
+            data.x = torch.randn(data.num_nodes, dim_feat).to(device)
+        elif args.node_feature == 'quasi-orthogonal':
+            pass 
+        elif args.node_feature == 'adjacency':
+            A_dense = A.toarray()
+            A_tensor = torch.tensor(A_dense)
+            data.x = A_tensor.float().to(device)
+        elif args.node_feature == 'original':
+            pass
+        else:
+            raise NotImplementedError(f'node_feature: {args.node_feature} is not implemented.')
+
+    method_dict = {
+        "CN": CommonNeighbor,
+        "AA": AA,
+        "RA": RA
+    }
+    for split in splits:
+        pos_edge_score, _ = method_dict[args.heuristic](A, splits[split]['pos_edge_label_index'],
+                                                        batch_size=args.batch_size)
+        neg_edge_score, _ = method_dict[args.heuristic](A, splits[split]['neg_edge_label_index'],
+                                                        batch_size=args.batch_size)
+        splits[split]['pos_edge_score'] = torch.sigmoid(pos_edge_score)
+        splits[split]['neg_edge_score'] = torch.sigmoid(neg_edge_score)
+
+    model = MLPPolynomialFeatures(data.num_nodes, 
+                                  data.x.size(1), 
+                                  hidden_dim=64, 
+                                  K=2, 
+                                  A=A, 
+                                  dropout=0.1,
+                                  use_nodefeat=args.use_nodefeat).to(device)
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+    early_stopping = EarlyStopping(patience=20, verbose=True)
+    for epoch in range(1, args.epochs + 1):
+        start = time.time()
+        auc = train(model, optimizer, data, splits, device, A, batch_size=args.batch_size)
+        print(f'Epoch: {epoch:03d}, AUC: {auc:.4f}')
+        val_auc  = valid(model, data, splits, device, A)
+        print(f'Validation AUC: {val_auc:.4f}')
+        test_auc = test(model, data, splits, device, A)
+        print(f'Test AUC: {test_auc:.4f}')
+        if args.early_stopping:
+            early_stopping(val_auc)
+            if early_stopping.early_stop:
+                print("Training stopped early!")
+                break
+        print(f'Time taken: {time.time() - start:.2f}s')
+        
+    test_auc = test(model, data, splits, device, A)
+    print(f'Test Result: AUC: {test_auc:.4f}')
+    save_to_csv(f'./results/lp_results_{args.dataset}.csv', args.model, args.use_nodefeat, args.node_feature, test_auc)
+    print(f'Saved results.')
+
 
 if __name__ == "__main__":
     args = parseargs()

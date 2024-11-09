@@ -10,7 +10,7 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from matplotlib import pyplot as plt
 from yacs.config import CfgNode 
-
+from sklearn.metrics import roc_auc_score
 from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import AA, RA
@@ -18,6 +18,22 @@ from baselines.heuristic import CN as CommonNeighbor
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
+from torch.utils.data import DataLoader
+from sklearn.metrics import f1_score
+
+class Config:
+    def __init__(self):
+        self.epochs = 100
+        self.dataset = "Cora"
+        self.batch_size = 512
+        self.heuristic = "CN"
+        self.gnn = "gcn"
+        self.model = "GIN_Variant"
+        self.use_feature = False
+        self.node_feature = 'adjacency' # 'one-hot', 'random', 'quasi-orthogonal'
+        self.use_early_stopping = True
+
+
 
 def create_GAE_model(cfg_model: CN,
                      cfg_score: CN,
@@ -127,6 +143,9 @@ def valid(model, data, splits, device, epoch):
     pos_loss = F.mse_loss(pos_pred, pos_edge_label)
     neg_loss = F.mse_loss(neg_pred, neg_edge_label)
     loss = pos_loss + neg_loss
+    all_preds = torch.cat([pos_pred, neg_pred], dim=0)
+    all_labels = torch.cat([torch.ones(pos_pred.size(0)), torch.zeros(neg_pred.size(0))], dim=0).to(device)
+
     return loss.item()
 
 
@@ -155,7 +174,6 @@ def test(model, data, splits, device):
     pos_loss = F.mse_loss(pos_pred, pos_edge_label)
     neg_loss = F.mse_loss(neg_pred, neg_edge_label)
     loss = pos_loss + neg_loss
-
     return loss.item()
 
 
@@ -193,19 +211,9 @@ def visualize(pred, true_label, save_path = './visualization.png'):
     plt.close()
 
     print(f"Visualization saved at {save_path}")
+    return 
 
 
-class Config:
-    def __init__(self):
-        self.epochs = 100
-        self.dataset = "Cora"
-        self.batch_size = 512
-        self.heuristic = "CN"
-        self.gnn = "gcn"
-        self.model = "GIN_Variant"
-        self.use_feature = False
-        self.node_feature = 'adjacency' # 'one-hot', 'random', 'quasi-orthogonal'
-        self.use_early_stopping = True
 
 
 def experiment_loop(args: Config):
@@ -271,10 +279,10 @@ def experiment_loop(args: Config):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        train_loss = train(model, optimizer, data, splits, device, args.batch_size)
-        print(f'Epoch: {epoch:03d}, Loss: {train_loss:.4f}, Cost Time: {time.time() - start:.4f}s')
+        train_loss, auc = train(model, optimizer, data, splits, device, args.batch_size)
+        print(f'Epoch: {epoch:03d}, Loss: {train_loss:.4f},  Cost Time: {time.time() - start:.4f}s')
 
-        valid_loss = valid(model, data, splits, device, epoch)
+        valid_loss, auc = valid(model, data, splits, device, epoch)
         print(f'Train Loss: {valid_loss:.4f}')
         if args.use_early_stopping:
             early_stopping(valid_loss)
@@ -282,13 +290,13 @@ def experiment_loop(args: Config):
                 print("Training stopped early!")
                 break
             
-    test_loss = test(model, data, splits, device)
+    test_loss, test_auc = test(model, data, splits, device)
     
     save_to_csv(f'./results/gcn4cn_{args.dataset}.csv', 
                 args.model, 
                 args.node_feature, 
                 args.heuristic, 
-                test_loss)
+                test_auc)
     
 
 
