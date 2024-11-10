@@ -63,11 +63,11 @@ class APoly_MLP(nn.Module):
         self.mlp_module = nn.ModuleList([nn.Linear(n_in, hlayers[i]) if i == 0 else
                                             nn.Linear(hlayers[i-1], n_out) if i == self.n_hlayers else
                                             nn.Linear(hlayers[i-1], hlayers[i]) for i in range(self.n_hlayers+1)])
-
         self.dropout = nn.Dropout(p=self.dropout)
+        
         A = torch.tensor(A.toarray(), dtype=torch.float32)
 
-        # high space complexity in large graph
+        # TODO high space complexity in large graph
         self.A_powers = [A]  # A^1
         for _ in range(1, K): # K, order of A 
             self.A_powers.append(torch.matmul(self.A_powers[-1], A))  # A^n
@@ -75,18 +75,18 @@ class APoly_MLP(nn.Module):
         # element-wise mult of A
         self.device = next(self.parameters()).device        
 
-    def forward(self, i, j, x):
-        assert torch.all((i >= 0) & (i < self.A_powers[0].shape[0])), "Index i is out of bounds."
-        assert torch.all((j >= 0) & (j < self.A_powers[0].shape[0])), "Index j is out of bounds."
+    def forward(self, src, tar, x):
+        assert torch.all((src >= 0) & (src < self.A_powers[0].shape[0])), "Index i is out of bounds."
+        assert torch.all((tar >= 0) & (tar < self.A_powers[0].shape[0])), "Index j is out of bounds."
         
         self.A_powers = [A_n.to(self.device) for A_n in self.A_powers]
 
         # dot products for each power of A
-        A_emb = [A_n[i] * A_n[j] for A_n in self.A_powers]
+        A_emb = [A_n[src] * A_n[tar] for A_n in self.A_powers]
         A_embK = torch.cat(A_emb, dim=1)  
 
         if self.use_nodefeat:
-            text_emb = x[i]* x[j]
+            text_emb = x[src]* x[tar]
             x = torch.cat((A_embK, text_emb), dim=1)
         else:
             x = A_embK
@@ -95,11 +95,10 @@ class APoly_MLP(nn.Module):
             x = F.relu(self.mlp_module[i](x))
             x = self.dropout(x)
         x = torch.sigmoid(self.mlp_module[-1](x))
-
         return x.view(-1)
 
 
-def train(model, optimizer, data, splits, device, A, batch_size=512):
+def train(model, optimizer, data, splits, device):
     model.train()
     optimizer.zero_grad()
     pos_edge_index = splits['train']['pos_edge_label_index'].to(device)
@@ -182,10 +181,10 @@ class Config:
         self.use_feature = True
         self.node_feature = 'one-hot'
         self.heuristic = "CN"
-
+        self.K = 3
 
 def save_to_csv(file_path, 
-                model_name, 
+                K,
                 use_nodefeat, 
                 nodefeat,
                 test_metric):
@@ -195,7 +194,7 @@ def save_to_csv(file_path,
         writer = csv.writer(file)
         if not file_exists:
             writer.writerow(['Model', 'Feature', 'Nodefeat', 'Test_MSE'])
-        writer.writerow(['APoly4CN', nodefeat, 'CN', test_metric])
+        writer.writerow([f'APoly4CN_{K}', nodefeat, 'CN', test_metric])
 
 
 def experiment_loop_cn():
@@ -241,7 +240,7 @@ def experiment_loop_cn():
     model = APoly_MLP(data.num_nodes, 
                                   data.x.size(1), 
                                   hidden_dim=64, 
-                                  K=2, 
+                                  K=args.K, 
                                   A=A, 
                                   dropout=0.1,
                                   use_nodefeat=args.use_nodefeat).to(device)
@@ -250,7 +249,7 @@ def experiment_loop_cn():
     early_stopping = EarlyStopping(patience=20, verbose=True)
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        train_mse = train(model, optimizer, data, splits, device, A, batch_size=args.batch_size)
+        train_mse = train(model, optimizer, data, splits, device)
         print(f'Epoch: {epoch:03d}, MSE: {train_mse:.4f}')
         val_mse  = valid(model, data, splits, device, A)
         print(f'Validation MSE: {val_mse:.4f}')
@@ -264,7 +263,7 @@ def experiment_loop_cn():
     test_mse = test(model, data, splits, device, A)
     print(f'Test Result: MSE: {test_mse:.4f}')
     save_to_csv(f'./results/APoly4CN_{args.dataset}.csv', 
-                args.model, 
+                args.K, # K
                 args.use_nodefeat, 
                 args.node_feature, 
                 test_mse)

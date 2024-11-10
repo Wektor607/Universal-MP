@@ -92,12 +92,8 @@ def create_GAE_model(cfg_model: CN,
 def train(model, optimizer, data, splits, device, epoch):
     model.train()
     optimizer.zero_grad()
-
-    # Positive and negative edges for training
     pos_edge_index = splits['train']['pos_edge_label_index'].to(device)
     neg_edge_index = splits['train']['neg_edge_label_index'].to(device)
-
-    # Labels for positive and negative edges (continuous regression labels)
     pos_edge_label = splits['train']['pos_edge_score'].to(device)
     neg_edge_label = splits['train']['neg_edge_score'].to(device)
 
