@@ -37,8 +37,10 @@ class NNet(nn.Module):
         return x
 
 
+
 class APoly_MLP(nn.Module):
-    def __init__(self, num_nodes, 
+    def __init__(self, 
+                 num_nodes: int, 
                  dim_feat, 
                  hidden_dim, 
                  K, 
@@ -224,7 +226,7 @@ def experiment_loop_cn():
         elif args.node_feature == 'none':
             pass
         else:
-            raise NotImplementedError(f'node_feature: {args.node_feature} is not implemented.')
+            raise NotImplementedError(f'{args.node_feature} is missing.')
 
     method_dict = {
         "CN": CommonNeighbor,
@@ -234,20 +236,24 @@ def experiment_loop_cn():
         "katz": katz_apro,
     }
     for split in splits:
-        pos_edge_score, _ = method_dict[args.heuristic](A, splits[split]['pos_edge_label_index'],
-                                                        batch_size=args.batch_size)
-        neg_edge_score, _ = method_dict[args.heuristic](A, splits[split]['neg_edge_label_index'],
-                                                        batch_size=args.batch_size)
+        pos_edge_score, _ = method_dict[args.heuristic](
+            A, splits[split]['pos_edge_label_index'], 
+            batch_size=args.batch_size
+        )
+        neg_edge_score, _ = method_dict[args.heuristic](
+            A, splits[split]['neg_edge_label_index'], 
+            batch_size=args.batch_size
+        )
         splits[split]['pos_edge_score'] = torch.sigmoid(pos_edge_score)
         splits[split]['neg_edge_score'] = torch.sigmoid(neg_edge_score)
 
     model = APoly_MLP(data.num_nodes, 
-                                  data.x.size(1), 
-                                  hidden_dim=64, 
-                                  K=args.K, 
-                                  A=A, 
-                                  dropout=0.1,
-                                  use_nodefeat=args.use_nodefeat).to(device)
+                      data.x.size(1), 
+                      hidden_dim=64, 
+                      K=args.K, 
+                      A=A, 
+                      dropout=0.1,
+                      use_nodefeat=args.use_nodefeat).to(device)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
     early_stopping = EarlyStopping(patience=20, verbose=True)
@@ -255,7 +261,7 @@ def experiment_loop_cn():
         start = time.time()
         train_mse = train(model, optimizer, data, splits, device)
         print(f'Epoch: {epoch:03d}, MSE: {train_mse:.4f}')
-        val_mse  = valid(model, data, splits, device, A)
+        val_mse = valid(model, data, splits, device, A)
         print(f'Validation MSE: {val_mse:.4f}')
         if args.early_stopping:
             early_stopping(val_mse)
