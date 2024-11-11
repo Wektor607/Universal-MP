@@ -1,7 +1,6 @@
-import argparse
 import csv
-import os, sys
-
+import os
+import sys
 import numpy as np
 import scipy.sparse as ssp
 import torch
@@ -10,16 +9,13 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from matplotlib import pyplot as plt
 from yacs.config import CfgNode 
-from sklearn.metrics import roc_auc_score
-from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import AA, RA
 from baselines.heuristic import CN as CommonNeighbor
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
-from torch.utils.data import DataLoader
-from sklearn.metrics import f1_score
+
 
 class Config:
     def __init__(self):
@@ -81,9 +77,7 @@ def create_GAE_model(cfg_model: CN,
                             cfg_score.product)
     elif cfg_score.product == 'inner':
         decoder = InnerProduct()
-
     else:
-        # Without this else I got: UnboundLocalError: local variable 'model' referenced before assignment
         raise ValueError('Current model does not exist')
 
     return GAE_forall(encoder=encoder, decoder=decoder)
@@ -139,8 +133,6 @@ def valid(model, data, splits, device, epoch):
     pos_loss = F.mse_loss(pos_pred, pos_edge_label)
     neg_loss = F.mse_loss(neg_pred, neg_edge_label)
     loss = pos_loss + neg_loss
-    all_preds = torch.cat([pos_pred, neg_pred], dim=0)
-    all_labels = torch.cat([torch.ones(pos_pred.size(0)), torch.zeros(neg_pred.size(0))], dim=0).to(device)
 
     return loss.item()
 
@@ -163,8 +155,8 @@ def test(model, data, splits, device):
     # Predict scores for both positive and negative edges
     pos_pred = model.decode(z[pos_edge_index[0]], z[pos_edge_index[1]])
     neg_pred = model.decode(z[neg_edge_index[0]], z[neg_edge_index[1]])
-    visualize(pos_pred, pos_edge_label, save_path = './visualization_pos.png')
-    visualize(neg_pred, neg_edge_label, save_path = './visualization_neg.png')
+    visualize(pos_pred, pos_edge_label, save_path='./visualization_pos.png')
+    visualize(neg_pred, neg_edge_label, save_path='./visualization_neg.png')
 
     # Compute regression loss (MSE)
     pos_loss = F.mse_loss(pos_pred, pos_edge_label)
@@ -189,7 +181,7 @@ def save_to_csv(file_path,
     print(f'Saved {model_name, node_feat, heuristic, test_loss} to {file_path}')
     
      
-def visualize(pred, true_label, save_path = './visualization.png'):
+def visualize(pred, true_label, save_path='./visualization.png'):
 
     pred = pred.cpu().detach().numpy()
     true_label = true_label.cpu().detach().numpy()
@@ -208,8 +200,6 @@ def visualize(pred, true_label, save_path = './visualization.png'):
 
     print(f"Visualization saved at {save_path}")
     return 
-
-
 
 
 def experiment_loop(args: Config):
@@ -260,25 +250,33 @@ def experiment_loop(args: Config):
         "RA": RA
     }
     for split in splits:
-        pos_edge_score, _ = method_dict[args.heuristic](A, splits[split]['pos_edge_label_index'],
-                                                        batch_size=args.batch_size)
-        neg_edge_score, _ = method_dict[args.heuristic](A, splits[split]['neg_edge_label_index'],
-                                                        batch_size=args.batch_size)
+        pos_edge_score, _ = method_dict[args.heuristic](
+            A, splits[split]['pos_edge_label_index'], 
+            batch_size=args.batch_size
+        )
+        neg_edge_score, _ = method_dict[args.heuristic](
+            A, splits[split]['neg_edge_label_index'], 
+            batch_size=args.batch_size)
         splits[split]['pos_edge_score'] = torch.sigmoid(pos_edge_score)
         splits[split]['neg_edge_score'] = torch.sigmoid(neg_edge_score)
 
     early_stopping = EarlyStopping(patience=10, verbose=True)
     
-    if args.model in ['GCN_Variant', 'GAT_Variant', 'SAGE_Variant', 'GIN_Variant']:
+    if args.model in [
+        'GCN_Variant', 'GAT_Variant', 'SAGE_Variant', 'GIN_Variant'
+    ]:
         model = create_GAE_model(cfg_model, cfg_score, args.model).to(device)
         
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        train_loss, auc = train(model, optimizer, data, splits, device, args.batch_size)
-        print(f'Epoch: {epoch:03d}, Loss: {train_loss:.4f},  Cost Time: {time.time() - start:.4f}s')
+        train_loss = train(
+            model, optimizer, data, splits, device, args.batch_size
+        )
+        print(f'Epoch: {epoch:03d}, Loss: {train_loss:.4f}, \ 
+              Cost Time: {time.time() - start:.4f}s')
 
-        valid_loss, auc = valid(model, data, splits, device, epoch)
+        valid_loss = valid(model, data, splits, device, epoch)
         print(f'Train Loss: {valid_loss:.4f}')
         if args.use_early_stopping:
             early_stopping(valid_loss)
@@ -286,18 +284,17 @@ def experiment_loop(args: Config):
                 print("Training stopped early!")
                 break
             
-    test_loss, test_auc = test(model, data, splits, device)
+    test_loss = test(model, data, splits, device)
     
     save_to_csv(f'./results/gcn4cn_{args.dataset}.csv', 
                 args.model, 
                 args.node_feature, 
                 args.heuristic, 
-                test_auc)
+                test_loss)
     
 
 
 if __name__ == "__main__":
-    
     args = Config()
     for model in ['GCN_Variant', 'GIN_Variant', 'SAGE_Variant']:
         args.model = model
