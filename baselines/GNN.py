@@ -378,6 +378,8 @@ class DotProduct(torch.nn.Module):
 
     def forward(self, x, y):
         return x * y
+    
+    
 class InnerProduct(torch.nn.Module):
 
     def forward(self, x, y, sigmoid=True):
