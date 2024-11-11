@@ -1,34 +1,30 @@
-import argparse
+
 import csv
 import os
 import sys
-import numpy as np
 import scipy.sparse as ssp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from matplotlib import pyplot as plt
-from yacs.config import CfgNode
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..')))
 
-from sklearn.metrics import roc_auc_score
-from baselines.MLP import MLPPolynomialFeatures
-from baselines.utils import loaddataset
-from baselines.heuristic import CN, AA, RA
-from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
-from archiv.mlp_heuristic_main import EarlyStopping
-from utils import  EarlyStopping, visualize
-from baselines.heuristic import CN as CommonNeighbor
+from baselines.utils import loaddataset # noqa E402
+from baselines.heuristic import AA, RA, CN as CommonNeighbor # noqa E402
+from archiv.mlp_heuristic_main import EarlyStopping # noqa E402
+
 
 class NNet(nn.Module):
 
     def __init__(self, n_in, n_out, hlayers=(128, 256, 128)):
         super(NNet, self).__init__()
         self.n_hlayers = len(hlayers)
-        self.fcs = nn.ModuleList([nn.Linear(n_in, hlayers[i]) if i == 0 else
-                                  nn.Linear(hlayers[i-1], n_out) if i == self.n_hlayers else
-                                  nn.Linear(hlayers[i-1], hlayers[i]) for i in range(self.n_hlayers+1)])
+        self.fcs = nn.ModuleList([
+            nn.Linear(n_in, hlayers[i]) if i == 0 else
+            nn.Linear(hlayers[i-1], n_out) if i == self.n_hlayers else
+            nn.Linear(hlayers[i-1], hlayers[i]) for i in range(self.n_hlayers+1)
+        ])
 
     def forward(self, x):
         for i in range(self.n_hlayers):
@@ -46,7 +42,7 @@ class APoly_MLP(nn.Module):
                  dropout, 
                  use_nodefeat):
         super(APoly_MLP, self).__init__()
-        """data.num_nodes, data.x.size(1), hidden_channels=64, K=2, A=A).to(device)"""
+
         # self.num_series = K
         self.dropout = dropout
         
@@ -54,31 +50,37 @@ class APoly_MLP(nn.Module):
         self.n_hlayers = 3
         self.use_nodefeat = use_nodefeat
         if self.use_nodefeat:
-            n_in = num_nodes * K + dim_feat  # size of concated A^k and features
+            # size of concated A^k and features
+            n_in = num_nodes * K + dim_feat
         else:
             n_in = num_nodes * K
             
         n_out = 1
         hlayers = (hidden_dim, hidden_dim, hidden_dim)
-        self.mlp_module = nn.ModuleList([nn.Linear(n_in, hlayers[i]) if i == 0 else
-                                            nn.Linear(hlayers[i-1], n_out) if i == self.n_hlayers else
-                                            nn.Linear(hlayers[i-1], hlayers[i]) for i in range(self.n_hlayers+1)])
+        self.mlp_module = nn.ModuleList([
+            nn.Linear(n_in, hlayers[i]) if i == 0 else
+            nn.Linear(hlayers[i-1], n_out) if i == self.n_hlayers else
+            nn.Linear(hlayers[i-1], hlayers[i]) for i in range(self.n_hlayers+1)])
         self.dropout = nn.Dropout(p=self.dropout)
         
         A = torch.tensor(A.toarray(), dtype=torch.float32)
 
         # TODO high space complexity in large graph
         self.A_powers = [A]  # A^1
-        for _ in range(1, K): # K, order of A 
+        
+        # K, order of A polynomial
+        for _ in range(1, K):
             self.A_powers.append(torch.matmul(self.A_powers[-1], A))  # A^n
         
         # element-wise mult of A
-        self.device = next(self.parameters()).device        
+        self.device = next(self.parameters()).device
 
     def forward(self, src, tar, x):
-        assert torch.all((src >= 0) & (src < self.A_powers[0].shape[0])), "Index i is out of bounds."
-        assert torch.all((tar >= 0) & (tar < self.A_powers[0].shape[0])), "Index j is out of bounds."
-        
+        assert torch.all((src >= 0) & (src < self.A_powers[0].shape[0])), \
+            "Index i is out of bounds."
+        assert torch.all((tar >= 0) & (src < self.A_powers[0].shape[0])), \
+            "Index i is out of bounds."
+            
         self.A_powers = [A_n.to(self.device) for A_n in self.A_powers]
 
         # dot products for each power of A
@@ -86,7 +88,7 @@ class APoly_MLP(nn.Module):
         A_embK = torch.cat(A_emb, dim=1)  
 
         if self.use_nodefeat:
-            text_emb = x[src]* x[tar]
+            text_emb = x[src] * x[tar]
             x = torch.cat((A_embK, text_emb), dim=1)
         else:
             x = A_embK
@@ -107,10 +109,10 @@ def train(model, optimizer, data, splits, device):
     neg_edge_label = splits['train']['neg_edge_score'].to(device)
 
     pos_pred = model(pos_edge_index[0], pos_edge_index[1],
-                               data.x)
+                     data.x)
     pos_loss = F.mse_loss(pos_pred, pos_edge_label)
     neg_pred = model(neg_edge_index[0], neg_edge_index[1],
-                            data.x)
+                     data.x)
     neg_loss = F.mse_loss(neg_pred, neg_edge_label)
     total_loss = pos_loss + neg_loss
 
@@ -133,10 +135,10 @@ def valid(model, data, splits, device, A):
     neg_pred = model(neg_edge_index[0], neg_edge_index[1], data.x)
 
     pos_pred = model(pos_edge_index[0], pos_edge_index[1],
-                               data.x)
+                     data.x)
     pos_loss = F.mse_loss(pos_pred, pos_label)
     neg_pred = model(neg_edge_index[0], neg_edge_index[1],
-                            data.x)
+                     data.x)
     neg_loss = F.mse_loss(neg_pred, neg_label)
     total_loss = pos_loss + neg_loss
 
@@ -160,11 +162,11 @@ def test(model, data, splits, device, A):
     neg_pred = model(neg_edge_index[0], neg_edge_index[1], data.x)
 
     pos_pred = model(pos_edge_index[0], pos_edge_index[1],
-                               data.x)
+                     data.x)
     pos_loss = F.mse_loss(pos_pred, pos_label)
 
     neg_pred = model(neg_edge_index[0], neg_edge_index[1],
-                            data.x)
+                     data.x)
     neg_loss = F.mse_loss(neg_pred, neg_label)
     total_loss = pos_loss + neg_loss
 
@@ -182,6 +184,7 @@ class Config:
         self.node_feature = 'one-hot'
         self.heuristic = "CN"
         self.K = 3
+
 
 def save_to_csv(file_path, 
                 K,
