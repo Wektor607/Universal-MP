@@ -21,15 +21,20 @@ class GCN_Variant(torch.nn.Module):
 
         if data_name == 'ogbl-citation2':
             if num_layers == 1:
-                self.convs.append(GCNConv(in_channels, out_channels, normalize=False))
-
+                self.convs.append(
+                    GCNConv(in_channels, out_channels, normalize=False)
+                )
             elif num_layers > 1:
-                self.convs.append(GCNConv(in_channels, hidden_channels, normalize=False))
+                self.convs.append(
+                    GCNConv(in_channels, hidden_channels, normalize=False))
 
                 for _ in range(num_layers - 2):
                     self.convs.append(
-                        GCNConv(hidden_channels, hidden_channels, normalize=False))
-                self.convs.append(GCNConv(hidden_channels, out_channels, normalize=False))
+                        GCNConv(hidden_channels, hidden_channels, 
+                                normalize=False))
+                self.convs.append(
+                    GCNConv(hidden_channels, out_channels, normalize=False)
+                )
 
         else:
             if num_layers == 1:
@@ -87,18 +92,22 @@ class GAT_Variant(torch.nn.Module):
         self.convs = torch.nn.ModuleList()
         if self.num_layers == 1:
             out_channels = int(self.out_channels / self.head)
-            self.convs.append(GATConv(self.in_channels, out_channels, heads=self.head))
-
+            self.convs.append(
+                GATConv(self.in_channels, out_channels, heads=self.head))
         else:
             hidden_channels = int(self.hidden_channels / self.head)
-            self.convs.append(GATConv(self.in_channels, hidden_channels, heads=self.head))
+            self.convs.append(
+                GATConv(self.in_channels, hidden_channels, heads=self.head))
 
             for _ in range(self.num_layers - 2):
                 self.convs.append(
-                    GATConv(self.hidden_channels, hidden_channels, heads=self.head))
-
+                    GATConv(
+                        self.hidden_channels, hidden_channels, heads=self.head
+                    )
+                )
             out_channels = int(self.out_channels / head)
-            self.convs.append(GATConv(self.hidden_channels, out_channels, heads=self.head))
+            self.convs.append(
+                GATConv(self.hidden_channels, out_channels, heads=self.head))
 
         self.invest = 1
 
@@ -130,7 +139,7 @@ class SAGE_Variant(torch.nn.Module):
                  hidden_channels,
                  out_channels,
                  num_layers,
-                 dropout, mlp_layer=None, head=None, node_num=None, cat_node_feat_mf=False, data_name=None):
+                 dropout):
         super(SAGE_Variant, self).__init__()
 
         self.convs = torch.nn.ModuleList()
@@ -176,8 +185,9 @@ class mlp_model(torch.nn.Module):
         else:
             self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
             for _ in range(num_layers - 2):
-                self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
-
+                self.lins.append(
+                    torch.nn.Linear(hidden_channels, hidden_channels)
+                )
             self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
 
         self.dropout = dropout
@@ -212,27 +222,29 @@ class GIN_Variant(torch.nn.Module):
                  dropout,
                  mlp_layer=None, data_name=None):
         super(GIN_Variant, self).__init__()
-
-        # self.mlp1= mlp_model( in_channels, hidden_channels, hidden_channels, gin_mlp_layer, dropout)
-        # self.mlp2 = mlp_model( hidden_channels, hidden_channels, out_channels, gin_mlp_layer, dropout)
-
         self.convs = torch.nn.ModuleList()
         gin_mlp_layer = mlp_layer
 
         if num_layers == 1:
-            self.mlp = mlp_model(in_channels, hidden_channels, hidden_channels, gin_mlp_layer, dropout)
+            self.mlp = mlp_model(
+                in_channels, hidden_channels, hidden_channels, 
+                gin_mlp_layer, dropout
+            )
             self.convs.append(GINConv(self.mlp))
 
         else:
-            # self.mlp_layers = torch.nn.ModuleList()
-            self.mlp1 = mlp_model(in_channels, hidden_channels, hidden_channels, gin_mlp_layer, dropout)
-
+            self.mlp1 = mlp_model(
+                in_channels, hidden_channels, hidden_channels, 
+                gin_mlp_layer, dropout
+            )
             self.convs.append(GINConv(self.mlp1))
             for _ in range(num_layers - 2):
-                self.mlp = mlp_model(hidden_channels, hidden_channels, hidden_channels, gin_mlp_layer, dropout)
+                self.mlp = mlp_model(hidden_channels, hidden_channels, 
+                                     hidden_channels, gin_mlp_layer, dropout)
                 self.convs.append(GINConv(self.mlp))
 
-            self.mlp2 = mlp_model(hidden_channels, hidden_channels, out_channels, gin_mlp_layer, dropout)
+            self.mlp2 = mlp_model(hidden_channels, hidden_channels, 
+                                  out_channels, gin_mlp_layer, dropout)
             self.convs.append(GINConv(self.mlp2))
 
         self.dropout = dropout
@@ -258,7 +270,11 @@ class GIN_Variant(torch.nn.Module):
 
 
 class DGCNN(torch.nn.Module):
-    def __init__(self, hidden_channels, num_layers, max_z, k=0.6, train_dataset=None,
+    def __init__(self, hidden_channels, 
+                 num_layers, 
+                 max_z, 
+                 k=0.6, 
+                 train_dataset=None,
                  dynamic_train=False, GNN=GCNConv, use_feature=False,
                  node_embedding=None):
         super(DGCNN, self).__init__()
@@ -270,7 +286,8 @@ class DGCNN(torch.nn.Module):
             if train_dataset is None:
                 k = 30
             else:
-                sampled_train = train_dataset[:1000] if dynamic_train else train_dataset
+                sampled_train = train_dataset[:1000] if dynamic_train else \
+                                train_dataset
                 num_nodes = sorted([g.num_nodes for g in sampled_train])
                 k = num_nodes[int(math.ceil(k * len(num_nodes))) - 1]
                 k = max(10, k)
@@ -295,15 +312,25 @@ class DGCNN(torch.nn.Module):
         conv1d_channels = [16, 32]
         total_latent_dim = hidden_channels * num_layers + 1
         conv1d_kws = [total_latent_dim, 5]
-        self.conv1 = Conv1d(1, conv1d_channels[0], conv1d_kws[0], conv1d_kws[0])
+        self.conv1 = Conv1d(
+            1, conv1d_channels[0], conv1d_kws[0], conv1d_kws[0]
+        )
         self.maxpool1d = MaxPool1d(2, 2)
-        self.conv2 = Conv1d(conv1d_channels[0], conv1d_channels[1], conv1d_kws[1], 1)
+        self.conv2 = Conv1d(
+            conv1d_channels[0], conv1d_channels[1], conv1d_kws[1], 1)
         dense_dim = int((self.k - 2) / 2 + 1)
         dense_dim = (dense_dim - conv1d_kws[1] + 1) * conv1d_channels[1]
         self.lin1 = Linear(dense_dim, 128)
         self.lin2 = Linear(128, 1)
 
-    def forward(self, z, edge_index, batch, x=None, edge_weight=None, node_id=None):
+    def forward(self, 
+                z, 
+                edge_index, 
+                batch, 
+                x=None, 
+                edge_weight=None, 
+                node_id=None):
+        
         # batch is the batch idx for each data samples
         z_emb = self.z_embedding(z)
         if z_emb.ndim == 3:  # in case z has multiple integer labels
@@ -375,13 +402,11 @@ class GAE_forall(torch.nn.Module):
 
 
 class DotProduct(torch.nn.Module):
-
     def forward(self, x, y):
         return x * y
     
     
 class InnerProduct(torch.nn.Module):
-
     def forward(self, x, y, sigmoid=True):
         value = (x * y).sum(dim=1)
         return torch.sigmoid(value) if sigmoid else value
@@ -406,7 +431,9 @@ class mlp_score(torch.nn.Module):
         else:
             self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
             for _ in range(num_layers - 2):
-                self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
+                self.lins.append(
+                    torch.nn.Linear(hidden_channels, hidden_channels)
+                )
             self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
 
         self.dropout = dropout
@@ -428,7 +455,11 @@ class mlp_score(torch.nn.Module):
     
 
 class GCN(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
+    def __init__(self, in_channels, 
+                 hidden_channels, 
+                 out_channels, 
+                 num_layers, 
+                 dropout):
         super(GCN, self).__init__()
 
         self.convs = torch.nn.ModuleList()
