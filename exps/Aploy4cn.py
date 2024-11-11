@@ -85,6 +85,7 @@ class APoly_MLP(nn.Module):
 
         # dot products for each power of A
         A_emb = [A_n[src] * A_n[tar] for A_n in self.A_powers]
+
         A_embK = torch.cat(A_emb, dim=1)  
 
         if self.use_nodefeat:
@@ -176,13 +177,13 @@ def test(model, data, splits, device, A):
 class Config:
     def __init__(self):
         self.epochs = 2000
-        self.dataset = "Cora"
+        self.dataset = "ddi"
         self.batch_size = 512
         self.model = "MLP"
         self.early_stopping = True
         self.use_feature = True
         self.node_feature = 'one-hot'
-        self.heuristic = "PPR"
+        self.heuristic = "CN"
         self.K = 2
 
 def save_to_csv(file_path, 
@@ -281,9 +282,9 @@ def experiment_loop_cn():
 
 if __name__ == "__main__":
     args = Config()
-    for args.K in [4]:
+    for args.K in [2,3]:
         args.use_nodefeat = True
-        for args.node_feature in ['original', 'one-hot', 'random', 'adjacency']:
+        for args.node_feature in ['one-hot', 'random', 'adjacency', 'original']:
             for i in range(5):
                 experiment_loop_cn()
         args.use_feature = False

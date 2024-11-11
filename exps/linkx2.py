@@ -24,9 +24,9 @@ from baselines.LINKX import LINKX
 class Config:
     def __init__(self):
         self.epochs = 100
-        self.dataset = "Cora"
+        self.dataset = "ddi"
         self.batch_size = 512
-        self.heuristic = "PPR"
+        self.heuristic = "CN"
         self.gnn = "gcn"
         self.model = "LINKX"
         self.use_feature = False
@@ -67,7 +67,7 @@ def create_LINKX(cfg_model: CN,
     return GAE_forall(encoder=encoder, decoder=decoder)
 
 
-def train(model, optimizer, data, splits, device, mode):
+def train(model, optimizer, data, splits, device, mode, batch_size=1024):
 
     # Check that mode is either 'train' or 'valid'
     assert mode in ['train', 'valid'], f"Invalid mode: '{mode}'. Mode must be 'train' or 'valid'."
@@ -87,7 +87,7 @@ def train(model, optimizer, data, splits, device, mode):
     z = model.encode(data.x, data.edge_index)
     pos_pred = model.decode(z[pos_edge_index[0]], z[pos_edge_index[1]])
     neg_pred = model.decode(z[neg_edge_index[0]], z[neg_edge_index[1]])
-    
+
     visualize(pos_pred, pos_edge_label, save_path = './visualization_pos.png')
     visualize(neg_pred, neg_edge_label, save_path = './visualization_neg.png')
 

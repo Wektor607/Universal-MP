@@ -24,9 +24,9 @@ from sklearn.metrics import f1_score
 class Config:
     def __init__(self):
         self.epochs = 100
-        self.dataset = "Cora"
+        self.dataset = "ddi"
         self.batch_size = 512
-        self.heuristic = "PPR"
+        self.heuristic = "CN"
         self.gnn = "gcn"
         self.model = "GIN_Variant"
         self.use_feature = False
@@ -99,12 +99,12 @@ def train(model, optimizer, data, splits, device, epoch):
 
     # Forward pass
     z = model.encode(data.x, data.edge_index)
-    
+
     # pred for pos, neg edges
     pos_pred = model.decode(z[pos_edge_index[0]], z[pos_edge_index[1]])
     neg_pred = model.decode(z[neg_edge_index[0]], z[neg_edge_index[1]])
 
-    # regression loss 
+    # regression loss
     pos_loss = F.mse_loss(pos_pred, pos_edge_label)
     neg_loss = F.mse_loss(neg_pred, neg_edge_label)
     loss = pos_loss + neg_loss
@@ -173,11 +173,11 @@ def test(model, data, splits, device):
     return loss.item()
 
 
-def save_to_csv(file_path, 
-                model_name, 
-                node_feat,
-                heuristic, 
-                test_loss):
+def save_to_csv(file_path: object,
+                model_name: object,
+                node_feat: object,
+                test_loss: object,
+                heuristic: object) -> object:
     
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     file_exists = os.path.isfile(file_path)
@@ -289,21 +289,18 @@ def experiment_loop(args: Config):
                 break
             
     test_auc = test(model, data, splits, device)
-    
-    save_to_csv(f'./results/gcn4{args.heuristic}_{args.dataset}.csv',
-                args.model, 
-                args.node_feature, 
-                args.heuristic, 
-                test_auc)
+
+    save_to_csv(f'./results/gcn4{args.heuristic}_{args.dataset}.csv', args.model, args.node_feature, test_auc,
+                args.heuristic)
     
 
 
 if __name__ == "__main__":
     
     args = Config()
-    for model in ['GCN_Variant', 'GIN_Variant', 'SAGE_Variant']:
+    for model in ['GIN_Variant', 'SAGE_Variant', 'GCN_Variant']:
         args.model = model
-        for node_feature in ['original', 'adjacency', 'one-hot', 'random']:
+        for node_feature in ['random', 'original', 'adjacency', 'one-hot']:
             args.node_feature = node_feature
             
             for i in range(5):
