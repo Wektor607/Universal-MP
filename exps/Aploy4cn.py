@@ -15,7 +15,7 @@ from yacs.config import CfgNode
 from sklearn.metrics import roc_auc_score
 from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
-from baselines.heuristic import CN, AA, RA
+from baselines.heuristic import CN, AA, RA, Ben_PPR, katz_apro
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 from archiv.mlp_heuristic_main import EarlyStopping
 from utils import  EarlyStopping, visualize
@@ -180,8 +180,8 @@ class Config:
         self.early_stopping = True
         self.use_feature = True
         self.node_feature = 'one-hot'
-        self.heuristic = "CN"
-        self.K = 3
+        self.heuristic = "PPR"
+        self.K = 2
 
 def save_to_csv(file_path, 
                 K,
@@ -194,7 +194,7 @@ def save_to_csv(file_path,
         writer = csv.writer(file)
         if not file_exists:
             writer.writerow(['Model', 'Feature', 'Nodefeat', 'Test_MSE'])
-        writer.writerow([f'APoly4CN_{K}', nodefeat, 'CN', test_metric])
+        writer.writerow([f'APoly4{args.heuristic}_{K}', nodefeat, args.heuristic, test_metric])
 
 
 def experiment_loop_cn():
@@ -221,13 +221,17 @@ def experiment_loop_cn():
             data.x = A_tensor.float().to(device)
         elif args.node_feature == 'original':
             pass
+        elif args.node_feature == 'none':
+            pass
         else:
             raise NotImplementedError(f'node_feature: {args.node_feature} is not implemented.')
 
     method_dict = {
         "CN": CommonNeighbor,
         "AA": AA,
-        "RA": RA
+        "RA": RA,
+        "PPR": Ben_PPR,
+        "katz": katz_apro,
     }
     for split in splits:
         pos_edge_score, _ = method_dict[args.heuristic](A, splits[split]['pos_edge_label_index'],
@@ -262,17 +266,21 @@ def experiment_loop_cn():
         
     test_mse = test(model, data, splits, device, A)
     print(f'Test Result: MSE: {test_mse:.4f}')
-    save_to_csv(f'./results/APoly4CN_{args.dataset}.csv', 
+    save_to_csv(f'./results/APoly4{args.heuristic}_{args.dataset}.csv',
                 args.K, # K
-                args.use_nodefeat, 
-                args.node_feature, 
+                args.use_nodefeat,
+                args.node_feature,
                 test_mse)
-    print(f'Saved to ./results/APoly4CN_{args.dataset}.csv')
-
+    print(f'Saved to ./results/APoly4{args.heuristic}_{args.dataset}.csv')
 
 if __name__ == "__main__":
     args = Config()
-    args.use_nodefeat = True
-    for args.node_feature in ['original', 'one-hot', 'random', 'adjacency']:
+    for args.K in [4]:
+        args.use_nodefeat = True
+        for args.node_feature in ['original', 'one-hot', 'random', 'adjacency']:
+            for i in range(5):
+                experiment_loop_cn()
+        args.use_feature = False
         for i in range(5):
+            args.node_feature = 'none'
             experiment_loop_cn()

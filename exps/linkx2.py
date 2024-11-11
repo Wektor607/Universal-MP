@@ -14,7 +14,7 @@ from yacs.config import CfgNode
 
 from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
-from baselines.heuristic import AA, RA
+from baselines.heuristic import AA, RA, Ben_PPR, katz_apro
 from baselines.heuristic import CN as CommonNeighbor
 from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
 from yacs.config import CfgNode as CN
@@ -26,7 +26,7 @@ class Config:
         self.epochs = 100
         self.dataset = "Cora"
         self.batch_size = 512
-        self.heuristic = "CN"
+        self.heuristic = "PPR"
         self.gnn = "gcn"
         self.model = "LINKX"
         self.use_feature = False
@@ -208,11 +208,13 @@ def experiment_loop(args: Config, num_experiments=5):
         cfg_model.in_channels = 1024
     else:
         cfg_model.in_channels = data.x.size(1)
-    
+
     method_dict = {
         "CN": CommonNeighbor,
         "AA": AA,
-        "RA": RA
+        "RA": RA,
+        "PPR": Ben_PPR,
+        "katz": katz_apro,
     }
     
     # Heuristic scores
@@ -252,7 +254,7 @@ def experiment_loop(args: Config, num_experiments=5):
     test_loss = test(model, data, splits, device)
 
     # Save results to CSV with mean and variance
-    save_to_csv(f'./results/LINKX2CN_{args.dataset}.csv', 
+    save_to_csv(f'./results/LINKX2{args.heuristic}_{args.dataset}.csv',
                 args.model, 
                 args.node_feature, 
                 args.heuristic, 
