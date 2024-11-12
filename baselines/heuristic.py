@@ -83,7 +83,7 @@ def sort_edge_index(edge_index):
     return edge_reindex, sort_indices
 
 
-def Ben_PPR(A, edge_index):
+def Ben_PPR(A, edge_index, batch_size=10000):
     """
     The Personalized PageRank heuristic score.
     Need to install fast_pagerank by "pip install fast-pagerank"
@@ -224,7 +224,7 @@ def shortest_path(A, edge_index, remove=False):
     return torch.FloatTensor(scores), None
 
 
-def katz_apro(A, edge_index, beta=0.005, path_len=3, remove=False):
+def katz_apro(A, edge_index, beta=0.005, path_len=3, remove=False, batch_size = 10000):
 
     scores = []
     G = from_scipy_sparse_array(A)
