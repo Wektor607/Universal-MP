@@ -12,8 +12,6 @@ def randomsplit(data, val_ratio: float=0.05, test_ratio: float=0.15):
     data.edge_index, _ = remove_self_loops(data.edge_index)
     if not hasattr(data, 'x'):
         data.num_nodes = data.x.shape[0]
-    else:
-        data.num_nodes = data.num_nodes
 
     transform = T.Compose([
         T.NormalizeFeatures(),
@@ -28,7 +26,7 @@ def randomsplit(data, val_ratio: float=0.05, test_ratio: float=0.15):
     del data, train_data, val_data, test_data
     return splits
 
-def loaddataset(name: str, use_valedges_as_input: bool, load=None):
+def loaddataset(name: str, load=None):
     if name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
         data = dataset[0]
