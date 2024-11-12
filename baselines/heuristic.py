@@ -49,7 +49,7 @@ def AA(A, edge_index, batch_size=100000):
     return torch.FloatTensor(scores), edge_index
 
 
-def RA(A, edge_index, batch_size=100000, beta=0.5, A2=None, gamma=0.1, num_nodes=0):
+def RA(A, edge_index, batch_size=100000, beta=0.5, A2=None, gamma=0.1):
     # The Adamic-Adar heuristic score.
     # multiplier = 1 / np.log(A.sum(axis=0))
     multiplier = 1 / (np.power(A.sum(axis=0), beta))
