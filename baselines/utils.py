@@ -6,16 +6,24 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.utils import to_undirected, coalesce, remove_self_loops
 import torch_geometric.transforms as T
 
-# random split dataset
-def randomsplit(data, val_ratio: float=0.05, test_ratio: float=0.15):
-    data.edge_index, _ = coalesce(data.edge_index, None, num_nodes=data.num_nodes)
+
+def randomsplit(data, val_ratio: float = 0.05, test_ratio: float = 0.15):
+    data.edge_index, _ = coalesce(
+        data.edge_index, None, num_nodes=data.num_nodes)
     data.edge_index, _ = remove_self_loops(data.edge_index)
     if not hasattr(data, 'x'):
         data.num_nodes = data.x.shape[0]
 
     transform = T.Compose([
-        T.NormalizeFeatures(),
-        RandomLinkSplit(is_undirected=True, num_val=val_ratio, num_test=test_ratio,add_negative_train_samples=True, split_labels=True)])
+            T.NormalizeFeatures(),
+            RandomLinkSplit(
+                is_undirected=True,
+                num_val=val_ratio,
+                num_test=test_ratio,
+                add_negative_train_samples=True,
+                split_labels=True
+            )
+        ])
     train_data, val_data, test_data = transform(data)
     splits = {'train': {}, 'valid': {}, 'test': {}}
     splits['train'] = train_data
@@ -26,7 +34,8 @@ def randomsplit(data, val_ratio: float=0.05, test_ratio: float=0.15):
     del data, train_data, val_data, test_data
     return splits
 
-def loaddataset(name: str, load=None):
+
+def loaddataset(name: str, nfeat_path=None):
     if name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
         data = dataset[0]
@@ -46,15 +55,17 @@ def loaddataset(name: str, load=None):
         splits = randomsplit(data)
         edge_index = data.edge_index
     data.edge_weight = None
-    data.adj_t = SparseTensor.from_edge_index(edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))
+    data.adj_t = SparseTensor.from_edge_index(
+        edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))
     data.adj_t = data.adj_t.to_symmetric().coalesce()
     data.max_x = -1
 
-    if load is not None:
-        data.x = torch.load(load, map_location="cpu")
-        data.max_x = -1
+    if nfeat_path:
+        # comment ? 
+        data.x = torch.load(nfeat_path, map_location="cpu")
     data.full_adj_t = data.adj_t
     return data, splits
+
 
 if __name__ == "__main__":
     loaddataset("ddi", False)
