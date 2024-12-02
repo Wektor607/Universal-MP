@@ -1,15 +1,18 @@
 
-import os, sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import argparse
+import os
+import sys
 import csv
-import numpy as np
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+)
+
 import scipy.sparse as ssp
 import torch
 import torch.nn.functional as F
 import time
 from matplotlib import pyplot as plt
-
+import numpy as np
 
 from yacs.config import CfgNode
 
@@ -19,24 +22,24 @@ from baselines.heuristic import AA, RA, Ben_PPR, katz_apro, shortest_path
 from baselines.heuristic import CN as CommonNeighbor
 from baselines.GNN import (
     GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, 
-    GAE_forall, InnerProduct, mlp_score
+    GAE4LP, InnerProduct, mlp_score
 )
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
 from baselines.LINKX import LINKX
-
+from train_utils import train, valid, test
 
 class Config:
     def __init__(self):
         self.epochs = 100
         self.dataset = "ddi"
         self.batch_size = 8192
-        self.h_key = "PPR"
+        self.h_key = "CN"
         self.gnn = "gcn"
         self.model = "LINKX"
         self.use_feature = False
         self.node_feature = 'original'  # 'one-hot', 'random', 
-                                        # 'quasi-orthogonal'
+                                        # 'quasi-orthogonal', 'adjacency'
         self.use_early_stopping = True
 
 
@@ -56,161 +59,15 @@ def init_LINKX(
             num_node_layers=cfg_model.num_node_layers,
         )
 
-    if cfg_score.product == 'dot':
-        decoder = mlp_score(cfg_model.out_channels,
-                            cfg_score.score_hidden_channels,
-                            cfg_score.score_out_channels,
-                            cfg_score.score_num_layers,
-                            cfg_score.score_dropout,
-                            cfg_score.product)
-    elif cfg_score.product == 'inner':
-        decoder = InnerProduct()
+    decoder = mlp_score(cfg_model.out_channels,
+                        cfg_score.score_hidden_channels,
+                        cfg_score.score_out_channels,
+                        cfg_score.score_num_layers,
+                        cfg_score.score_dropout,
+                        cfg_score.product)
 
-    else:
-        # Without this else I got: UnboundLocalError: local variable 'model'
-        # referenced before assignment
-        raise ValueError('Current model does not exist')
+    return GAE4LP(encoder=encoder, decoder=decoder)
 
-    return GAE_forall(encoder=encoder, decoder=decoder)
-
-
-def train(model, optimizer, data, splits, device, batch_size=512):
-    model.train()
-    total_loss = 0
-
-    pos_edge_index = splits['train']['pos_edge_label_index'].to(device)
-    neg_edge_index = splits['train']['neg_edge_label_index'].to(device)
-    pos_edge_label = splits['train']['pos_edge_score'].to(device)
-    neg_edge_label = splits['train']['neg_edge_score'].to(device)
-
-    num_batches = (pos_edge_index.size(1) + batch_size - 1) // batch_size
-
-    for batch_idx in range(num_batches):
-        start_idx = batch_idx * batch_size
-        end_idx = min((batch_idx + 1) * batch_size, pos_edge_index.size(1))
-
-        batch_pos_edge_index = pos_edge_index[:, start_idx:end_idx]
-        batch_neg_edge_index = neg_edge_index[:, start_idx:end_idx]
-        batch_pos_edge_label = pos_edge_label[start_idx:end_idx]
-        batch_neg_edge_label = neg_edge_label[start_idx:end_idx]
-
-        optimizer.zero_grad()
-
-        batch_edge_index = torch.cat(
-            [batch_pos_edge_index, batch_neg_edge_index], dim=1
-        )
-
-        z = model.encode(
-            data.x, batch_edge_index
-        )
-
-        pos_pred = model.decode(
-            z[batch_pos_edge_index[0]], z[batch_pos_edge_index[1]]
-        ).squeeze()
-        neg_pred = model.decode(
-            z[batch_neg_edge_index[0]], z[batch_neg_edge_index[1]]
-        ).squeeze()
-
-        pos_loss = F.mse_loss(pos_pred, batch_pos_edge_label)
-        neg_loss = F.mse_loss(neg_pred, batch_neg_edge_label)
-        batch_loss = pos_loss + neg_loss
-
-        batch_loss.backward()
-
-        total_loss += batch_loss.item()
-
-        optimizer.step()
-
-    return total_loss / num_batches
-
-
-@torch.no_grad()
-def valid(model, data, splits, device, batch_size=512):
-    model.eval()
-
-    total_loss = 0
-
-    pos_edge_index = splits['valid']['pos_edge_label_index'].to(device)
-    neg_edge_index = splits['valid']['neg_edge_label_index'].to(device)
-    pos_edge_label = splits['valid']['pos_edge_score'].to(device)
-    neg_edge_label = splits['valid']['neg_edge_score'].to(device)
-
-    num_batches = (pos_edge_index.size(1) + batch_size - 1) // batch_size
-
-    for batch_idx in range(num_batches):
-        start_idx = batch_idx * batch_size
-        end_idx = min((batch_idx + 1) * batch_size, pos_edge_index.size(1))
-
-        batch_pos_edge_index = pos_edge_index[:, start_idx:end_idx]
-        batch_neg_edge_index = neg_edge_index[:, start_idx:end_idx]
-        batch_pos_edge_label = pos_edge_label[start_idx:end_idx]
-        batch_neg_edge_label = neg_edge_label[start_idx:end_idx]
-
-        batch_edge_index = torch.cat(
-            [batch_pos_edge_index, batch_neg_edge_index], dim=1
-        )
-
-        z = model.encode(data.x, batch_edge_index)
-
-        pos_pred = model.decode(
-            z[batch_pos_edge_index[0]], z[batch_pos_edge_index[1]]
-            ).squeeze()
-        neg_pred = model.decode(
-            z[batch_neg_edge_index[0]], z[batch_neg_edge_index[1]]
-            ).squeeze()
-
-        pos_loss = F.mse_loss(pos_pred, batch_pos_edge_label)
-        neg_loss = F.mse_loss(neg_pred, batch_neg_edge_label)
-        batch_loss = pos_loss + neg_loss
-
-        total_loss += batch_loss.item()
-
-    return total_loss / num_batches
-
-
-@torch.no_grad()
-def test(model, data, splits, device, batch_size=512):
-    model.eval()
-
-    # Positive and negative edges for test
-    total_loss = 0
-
-    pos_edge_index = splits['test']['pos_edge_label_index'].to(device)
-    neg_edge_index = splits['test']['neg_edge_label_index'].to(device)
-    pos_edge_label = splits['test']['pos_edge_score'].to(device)
-    neg_edge_label = splits['test']['neg_edge_score'].to(device)
-
-    num_batches = (pos_edge_index.size(1) + batch_size - 1) // batch_size
-
-    for batch_idx in range(num_batches):
-        start_idx = batch_idx * batch_size
-        end_idx = min((batch_idx + 1) * batch_size, pos_edge_index.size(1))
-
-        batch_pos_edge_index = pos_edge_index[:, start_idx:end_idx]
-        batch_neg_edge_index = neg_edge_index[:, start_idx:end_idx]
-        batch_pos_edge_label = pos_edge_label[start_idx:end_idx]
-        batch_neg_edge_label = neg_edge_label[start_idx:end_idx]
-
-        batch_edge_index = torch.cat(
-            [batch_pos_edge_index, batch_neg_edge_index], dim=1
-        )
-        
-        z = model.encode(data.x, batch_edge_index)
-
-        pos_pred = model.decode(
-            z[batch_pos_edge_index[0]], z[batch_pos_edge_index[1]]
-            ).squeeze()
-        neg_pred = model.decode(
-            z[batch_neg_edge_index[0]], z[batch_neg_edge_index[1]]
-            ).squeeze()
-
-        pos_loss = F.mse_loss(pos_pred, batch_pos_edge_label)
-        neg_loss = F.mse_loss(neg_pred, batch_neg_edge_label)
-        batch_loss = pos_loss + neg_loss
-
-        total_loss += batch_loss.item()
-
-    return total_loss / num_batches
 
 
 def save_to_csv(file_path,
@@ -251,7 +108,7 @@ def visualize(pred, true_label, save_path='./visualization.png'):
     print(f"Visualization saved at {save_path}")
 
 
-def experiment_loop(args: Config, num_experiments=5):
+def experiment_loop(args: Config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load dataset and set up data
@@ -264,7 +121,7 @@ def experiment_loop(args: Config, num_experiments=5):
         shape=(data.num_nodes, data.num_nodes)
     )
 
-    # Configure node features based on specified type
+    # Config node feature
     if args.node_feature == 'one-hot':
         data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
     elif args.node_feature == 'random':
@@ -332,7 +189,7 @@ def experiment_loop(args: Config, num_experiments=5):
 
         # Validate every 20 epochs
         if epoch % 20 == 0:
-            valid_loss = valid(model, data, splits, device)
+            valid_loss = valid(model, data, splits, device, args.batch_size)
             print(
                 f'Epoch: {epoch:03d}, train loss: {train_loss:.4f}, '
                 f'valid loss: {valid_loss:.4f}, '
@@ -344,7 +201,7 @@ def experiment_loop(args: Config, num_experiments=5):
                     print("Training stopped early!")
                     break
 
-    test_loss = test(model, data, splits, device)
+    test_loss = test(model, data, splits, device, args.batch_size)
 
     # Save results to CSV with mean and variance
     save_to_csv(f'./results/LINKX2{args.h_key}_{args.dataset}.csv',

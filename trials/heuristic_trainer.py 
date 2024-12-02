@@ -1,0 +1,116 @@
+import os
+import sys
+import csv
+import time
+
+# Add the parent directory to the system path
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+)
+
+# General scientific computing libraries
+import numpy as np
+import scipy.sparse as ssp
+from matplotlib import pyplot as plt
+
+# PyTorch and related libraries
+import torch
+import torch.nn.functional as F
+from torch.nn import BCEWithLogitsLoss
+from torch.utils.data import DataLoader
+from torch_sparse import SparseTensor
+
+from sklearn.metrics import roc_auc_score
+from torch_geometric.utils import negative_sampling
+from ogb.linkproppred import Evaluator
+
+# tqdm for progress tracking
+from tqdm import tqdm
+from yacs.config import CfgNode
+
+# Custom imports
+from baselines.MLP import MLPPolynomialFeatures
+from baselines.utils import loaddataset
+from baselines.heuristic import (
+    AA, RA, Ben_PPR, katz_apro, shortest_path,
+    CN as CommonNeighbor
+)
+from baselines.GNN import (
+    GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant,
+    GAE4LP, InnerProduct, mlp_score
+)
+from baselines.LINKX import LINKX
+from archiv.mlp_heuristic_main import EarlyStopping
+
+
+def train_hits(encoder, predictor, data, split_edge, optimizer, batch_size, 
+        mask_target, dataset_name, num_neg, adj2):
+    encoder.train()
+    predictor.train()
+    device = data.adj_t.device()
+    criterion = BCEWithLogitsLoss(reduction='mean')
+    pos_train_edge = split_edge['train']['edge'].to(device)
+    
+    optimizer.zero_grad()
+    total_loss = total_examples = 0
+    if dataset_name == "ogbl-vessel":
+        neg_edge_epoch = split_edge['train']['edge_neg'].to(device).t()
+    elif dataset_name.startswith("ogbl") and dataset_name != "ogbl-ddi": # use global negative sampling for ddi
+        num_pos_max = max(data.adj_t.nnz()//2, pos_train_edge.size(0))
+        neg_edge_epoch = torch.randint(0, data.adj_t.size(0), 
+                                       size=(2, num_pos_max*num_neg),
+                                        dtype=torch.long, device=device)
+    else:
+        neg_edge_epoch = negative_sampling(data.edge_index, num_nodes=data.adj_t.size(0),
+                                           num_neg_samples=(data.adj_t.nnz()//2)*num_neg)
+    # for perm in (pbar := tqdm(DataLoader(range(pos_train_edge.size(0)), batch_size,
+    #                        shuffle=True)) ):
+    for perm in tqdm(DataLoader(range(pos_train_edge.size(0)), batch_size,
+                           shuffle=True), desc='Train'):
+        edge = pos_train_edge[perm].t()
+        if mask_target:
+            adj_t = data.adj_t
+            undirected_edges = torch.cat((edge, edge.flip(0)), dim=-1)
+            target_adj = SparseTensor.from_edge_index(undirected_edges, sparse_sizes=adj_t.sizes())
+            adj_t = spmdiff_(adj_t, target_adj, keep_val=True)
+        else:
+            adj_t = data.adj_t
+
+        h = encoder(data.x, adj_t)
+
+        neg_edge = neg_edge_epoch[:,perm]
+        train_edges = torch.cat((edge, neg_edge), dim=-1)
+        train_label = torch.cat((torch.ones(edge.size()[1]), torch.zeros(neg_edge.size()[1])), dim=0).to(device)
+        out = predictor(h, adj_t, train_edges, adj2 = adj2).squeeze()
+        loss = criterion(out, train_label)
+
+        loss.backward()
+
+        if data.x is not None:
+            torch.nn.utils.clip_grad_norm_(data.x, 1.0)
+        torch.nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
+        optimizer.step()
+        optimizer.zero_grad()
+        total_examples += train_label.size(0)
+        total_loss += loss.item() * train_label.size(0)
+    
+    return total_loss / total_examples
+
+
+def train_batch(model, optimizer, data, split_edge, device, batch_size=512):
+    # TODO replace train_batch with this distributed data sampler
+    model.train()
+    
+    pos_train_edge = split_edge['train']['edge'].to(device)
+    
+    for perm in tqdm(DataLoader(range(pos_train_edge.size(0)), batch_size,
+                           shuffle=True), desc='Train'):
+        
+        edge = pos_train_edge[perm].t()
+        batch_pos_edge_index = pos_edge_index[perm]
+        batch_neg_edge_index = neg_edge_index[perm]
+        batch_pos_edge_label = pos_edge_label[perm]
+        batch_neg_edge_label = neg_edge_label[perm]
+    
+    return 

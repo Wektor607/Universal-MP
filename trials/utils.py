@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from matplotlib import pyplot as plt
 
 
-def visualize(pred, true_label, save_path = './visualization.png'):
+def visualize(pred, true_label, save_path='./visualization.png'):
 
     pred = pred.cpu().detach().numpy()
     true_label = true_label.cpu().detach().numpy()

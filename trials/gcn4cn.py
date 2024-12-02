@@ -16,7 +16,7 @@ from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import AA, RA, Ben_PPR, katz_apro
 from baselines.heuristic import CN as CommonNeighbor
-from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE_forall, InnerProduct, mlp_score
+from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE4LP, InnerProduct, mlp_score
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
 from torch.utils.data import DataLoader
@@ -87,7 +87,7 @@ def create_GAE_model(cfg_model: CN,
         # Without this else I got: UnboundLocalError: local variable 'model' referenced before assignment
         raise ValueError('Current model does not exist')
 
-    return GAE_forall(encoder=encoder, decoder=decoder)
+    return GAE4LP(encoder=encoder, decoder=decoder)
 
 
 def train(model, optimizer, data, splits, device, epoch, batch_size=512):
