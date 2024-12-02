@@ -36,51 +36,51 @@ class Config:
         self.use_early_stopping = True
 
 
-def create_GAE_model(cfg_model: CN,
-                     cfg_score: CN,
+def create_GAE_model(cfg_encoder: CN,
+                     cfg_decoder: CN,
                      model_name: str):
     if model_name in {'GAT', 'VGAE', 'GAE', 'GraphSage'}:
         raise NotImplementedError('Current model does not exist')
-        # model = create_model(cfg_model)
+        # model = create_model(cfg_encoder)
 
     elif model_name == 'Custom_GAT':
-        encoder = Custom_GAT(cfg_model.in_channels,
-                              cfg_model.hidden_channels,
-                              cfg_model.out_channels,
-                              cfg_model.num_layers,
-                              cfg_model.dropout,
-                              cfg_model.heads,
+        encoder = Custom_GAT(cfg_encoder.in_channels,
+                              cfg_encoder.hidden_channels,
+                              cfg_encoder.out_channels,
+                              cfg_encoder.num_layers,
+                              cfg_encoder.dropout,
+                              cfg_encoder.heads,
                               )
     elif model_name == 'Custom_GCN':
-        encoder = Custom_GCN(cfg_model.in_channels,
-                              cfg_model.hidden_channels,
-                              cfg_model.out_channels,
-                              cfg_model.num_layers,
-                              cfg_model.dropout,
+        encoder = Custom_GCN(cfg_encoder.in_channels,
+                              cfg_encoder.hidden_channels,
+                              cfg_encoder.out_channels,
+                              cfg_encoder.num_layers,
+                              cfg_encoder.dropout,
                               )
     elif model_name == 'GraphSAGE':
-        encoder = GraphSAGE(cfg_model.in_channels,
-                               cfg_model.hidden_channels,
-                               cfg_model.out_channels,
-                               cfg_model.num_layers,
-                               cfg_model.dropout,
+        encoder = GraphSAGE(cfg_encoder.in_channels,
+                               cfg_encoder.hidden_channels,
+                               cfg_encoder.out_channels,
+                               cfg_encoder.num_layers,
+                               cfg_encoder.dropout,
                                )
     elif model_name == 'GIN_Variant':
-        encoder = GIN_Variant(cfg_model.in_channels,
-                              cfg_model.hidden_channels,
-                              cfg_model.out_channels,
-                              cfg_model.num_layers,
-                              cfg_model.dropout,
-                              cfg_model.mlp_layer
+        encoder = GIN_Variant(cfg_encoder.in_channels,
+                              cfg_encoder.hidden_channels,
+                              cfg_encoder.out_channels,
+                              cfg_encoder.num_layers,
+                              cfg_encoder.dropout,
+                              cfg_encoder.mlp_layer
                               )
-    if cfg_score.product == 'dot':
-        decoder = LinkPredictor(cfg_model.out_channels,
-                            cfg_score.score_hidden_channels,
-                            cfg_score.score_out_channels,
-                            cfg_score.score_num_layers,
-                            cfg_score.score_dropout,
-                            cfg_score.product)
-    elif cfg_score.product == 'inner':
+    if cfg_decoder.product == 'dot':
+        decoder = LinkPredictor(cfg_encoder.out_channels,
+                            cfg_decoder.score_hidden_channels,
+                            cfg_decoder.score_out_channels,
+                            cfg_decoder.score_num_layers,
+                            cfg_decoder.score_dropout,
+                            cfg_decoder.product)
+    elif cfg_decoder.product == 'inner':
         decoder = InnerProduct()
 
     else:
@@ -276,14 +276,14 @@ def experiment_loop(args: Config):
     with open('./yamls/cora/heart_gnn_models.yaml', "r") as f:
         cfg = CfgNode.load_cfg(f)
 
-    cfg_model = eval(f'cfg.model.{args.model}')
-    cfg_score = eval(f'cfg.score.{args.model}')
+    cfg_encoder = eval(f'cfg.model.{args.model}')
+    cfg_decoder = eval(f'cfg.score.{args.model}')
     cfg.model.type = args.model
 
     if not hasattr(splits['train'], 'x') or splits['train'].x is None:
-        cfg_model.in_channels = 1024
+        cfg_encoder.in_channels = 1024
     else:
-        cfg_model.in_channels = data.x.size(1)
+        cfg_encoder.in_channels = data.x.size(1)
 
     method_dict = {
         "CN": CommonNeighbor,
@@ -303,7 +303,7 @@ def experiment_loop(args: Config):
     early_stopping = EarlyStopping(patience=20, verbose=True)
 
     if args.model in ['Custom_GCN', 'Custom_GAT', 'GraphSAGE', 'GIN_Variant']:
-        model = create_GAE_model(cfg_model, cfg_score, args.model).to(device)
+        model = create_GAE_model(cfg_encoder, cfg_decoder, args.model).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     for epoch in range(1, args.epochs + 1):

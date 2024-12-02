@@ -1,50 +1,20 @@
 import os
 import sys
-import csv
-import time
 
 # Add the parent directory to the system path
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 )
 
-# General scientific computing libraries
-import numpy as np
-import scipy.sparse as ssp
-from matplotlib import pyplot as plt
 
 # PyTorch and related libraries
 import torch
 import torch.nn.functional as F
-from torch.nn import BCEWithLogitsLoss
-from torch.utils.data import DataLoader
-from torch_sparse import SparseTensor
-
-from sklearn.metrics import roc_auc_score
-from torch_geometric.utils import negative_sampling
-from ogb.linkproppred import Evaluator
-
-# tqdm for progress tracking
-from tqdm import tqdm
-from yacs.config import CfgNode
-
-# Custom imports
-from baselines.MLP import MLPPolynomialFeatures
-from baselines.utils import loaddataset
-from baselines.heuristic import (
-    AA, RA, Ben_PPR, katz_apro, shortest_path,
-    CN as CommonNeighbor
-)
-from baselines.GNN import (
-    Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant,
-    GAE4LP, InnerProduct, LinkPredictor
-)
-from baselines.LINKX import LINKX
-from archiv.mlp_heuristic_main import EarlyStopping
 
 
-def train(model, optimizer, data, splits, device, batch_size=512):
-    model.train()
+def train(encoder, decoder,  optimizer, data, splits, device, batch_size=512):
+    encoder.train()
+    decoder.train()
     total_loss = 0
     # compare train loop with train_batch and see the difference and reanalyse
     pos_edge_index = splits['train']['pos_edge_label_index'].to(device)
@@ -69,14 +39,14 @@ def train(model, optimizer, data, splits, device, batch_size=512):
             [batch_pos_edge_index, batch_neg_edge_index], dim=1
         )
 
-        z = model.encode(
+        z = encoder(
             data.x, batch_edge_index
         )
 
-        pos_pred = model.decode(
+        pos_pred = decoder(
             z[batch_pos_edge_index[0]], z[batch_pos_edge_index[1]]
         ).squeeze()
-        neg_pred = model.decode(
+        neg_pred = decoder(
             z[batch_neg_edge_index[0]], z[batch_neg_edge_index[1]]
         ).squeeze()
 

@@ -9,6 +9,7 @@ import time
 from matplotlib import pyplot as plt
 import numpy as np
 from yacs.config import CfgNode
+from pprint import pprint 
 from train_utils import train, valid, test
 
 from baselines.utils import loaddataset
@@ -18,14 +19,12 @@ sys.path.insert(
 )
 from baselines.heuristic import AA, RA, Ben_PPR, katz_apro, shortest_path
 from baselines.heuristic import CN as CommonNeighbor
-from baselines.GNN import (
-    Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant, 
-    GAE4LP, InnerProduct, LinkPredictor
-)
+from baselines.GNN import  LinkPredictor, GAE4LP
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
 from baselines.LINKX import LINKX
 from train_utils import train, valid, test
+from utils import save_to_csv, visualize
 
 class Config:
     def __init__(self):
@@ -42,68 +41,31 @@ class Config:
 
 
 def init_LINKX(
-    cfg_model: CN,
-    cfg_score: CN,
+    cfg_encoder: CN,
+    cfg_decoder: CN,
     m_name: str):
+    # split them into two models 
+    # https://github.com/Barcavin/efficient-node-labelling/blob/master/main.py
     
     if m_name in ['LINKX']:
         encoder = LINKX(
-            num_nodes=cfg_model.num_nodes,
-            in_channels=cfg_model.in_channels,
-            hidden_channels=cfg_model.hidden_channels,
-            out_channels=cfg_model.out_channels,
-            num_layers=cfg_model.num_layers,
-            num_edge_layers=cfg_model.num_edge_layers,
-            num_node_layers=cfg_model.num_node_layers,
+            num_nodes=cfg_encoder.num_nodes,
+            in_channels=cfg_encoder.in_channels,
+            hidden_channels=cfg_encoder.hidden_channels,
+            out_channels=cfg_encoder.out_channels,
+            num_layers=cfg_encoder.num_layers,
+            num_edge_layers=cfg_encoder.num_edge_layers,
+            num_node_layers=cfg_encoder.num_node_layers,
         )
 
-    decoder = LinkPredictor(cfg_model.out_channels,
-                        cfg_score.score_hidden_channels,
-                        cfg_score.score_out_channels,
-                        cfg_score.score_num_layers,
-                        cfg_score.score_dropout,
-                        cfg_score.product)
+    decoder = LinkPredictor(cfg_encoder.out_channels,
+                        cfg_decoder.score_hidden_channels,
+                        cfg_decoder.score_out_channels,
+                        cfg_decoder.score_num_layers,
+                        cfg_decoder.score_dropout)
 
     return GAE4LP(encoder=encoder, decoder=decoder)
 
-
-
-def save_to_csv(file_path,
-                model_name,
-                node_feat,
-                heuristic,
-                test_loss):
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    file_exists = os.path.isfile(file_path)
-    with open(file_path, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        if not file_exists:
-            writer.writerow(['Model', 'NodeFeat', 'Heuristic', 'Test_Loss'])
-        writer.writerow([model_name, node_feat, heuristic, test_loss])
-    print(f'Saved {model_name, node_feat, heuristic, test_loss} to '
-          f'{file_path}')
-
-
-def visualize(pred, true_label, save_path='./visualization.png'):
-    pred = pred.cpu().detach().numpy()
-    true_label = true_label.cpu().detach().numpy()
-    plt.figure(figsize=(10, 6))
-    plt.scatter(np.arange(len(true_label)), true_label, color='#A6CEE3',
-                label='True Score',
-                alpha=0.6)
-    plt.scatter(np.arange(len(pred)), pred, color='#B2DF8A',
-                label='Prediction', alpha=0.6)
-
-    plt.title('Predictions vs True Score')
-    plt.xlabel('Sample Index')
-    plt.ylabel('Value')
-    plt.ylim(0, 1.5)
-    plt.legend()
-
-    plt.savefig(save_path)
-    plt.close()
-
-    print(f"Visualization saved at {save_path}")
 
 
 def experiment_loop(args: Config):
@@ -137,17 +99,20 @@ def experiment_loop(args: Config):
         )
 
     # Initialize model configuration
-    with open('./yamls/cora/heart_gnn_models.yaml', "r") as f:
+    with open('yamls/cora/heart_gnn_models.yaml', "r") as f:
         cfg = CfgNode.load_cfg(f)
 
-    cfg_model = eval(f'cfg.model.{args.model}')
-    cfg_score = eval(f'cfg.score.{args.model}')
+    cfg_encoder = eval(f'cfg.model.{args.model}')
+    cfg_decoder = eval(f'cfg.score.{args.model}')
     cfg.model.type = args.model
+    
+    pprint(cfg_encoder)
+    pprint(cfg_decoder)
 
     if not hasattr(splits['train'], 'x') or splits['train'].x is None:
-        cfg_model.in_channels = 1024
+        cfg_encoder.in_channels = 1024
     else:
-        cfg_model.in_channels = data.x.size(1)
+        cfg_encoder.in_channels = data.x.size(1)
 
     heuristic = {
         "CN": CommonNeighbor,
@@ -174,21 +139,43 @@ def experiment_loop(args: Config):
     early_stopping = EarlyStopping(patience=5, verbose=True)
 
     if args.model == 'LINKX':
-        cfg_model.in_channels = data.x.size(-1)
-        cfg_model.num_nodes = data.num_nodes
-        model = init_LINKX(cfg_model, cfg_score, 'LINKX').to(device)
+        cfg_encoder.in_channels = data.x.size(-1)
+        cfg_encoder.num_nodes = data.num_nodes
+
+        encoder = LINKX(
+            num_nodes=cfg_encoder.num_nodes,
+            in_channels=cfg_encoder.in_channels,
+            hidden_channels=cfg_encoder.hidden_channels,
+            out_channels=cfg_encoder.out_channels,
+            num_layers=cfg_encoder.num_layers,
+            num_edge_layers=cfg_encoder.num_edge_layers,
+            num_node_layers=cfg_encoder.num_node_layers,
+        )
+
+        decoder = LinkPredictor(cfg_encoder.out_channels,
+                    cfg_decoder.score_hidden_channels,
+                    cfg_decoder.score_out_channels,
+                    cfg_decoder.score_num_layers,
+                    cfg_decoder.score_dropout)
+
+    encoder.reset_parameters()
+    decoder.reset_parameters()
+    parameters = list(encoder.parameters()) + list(decoder.parameters())
+    optimizer = torch.optim.Adam(parameters, lr=args.lr, weight_decay=args.weight_decay)
+    total_params = sum(p.numel() for param in parameters for p in param)
+    print(f'Total number of parameters is {total_params}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     for epoch in range(1, args.epochs + 1):
         start = time.time()
         train_loss = train(
-            model, optimizer, data, splits, device, args.batch_size
+            encoder, decoder, optimizer, data, splits, device, args.batch_size
         )
 
         # Validate every 20 epochs
         if epoch % 20 == 0:
-            valid_loss = valid(model, data, splits, device, args.batch_size)
+            valid_loss = valid(encoder, decoder, data, splits, device, args.batch_size)
             print(
                 f'Epoch: {epoch:03d}, train loss: {train_loss:.4f}, '
                 f'valid loss: {valid_loss:.4f}, '
@@ -200,7 +187,7 @@ def experiment_loop(args: Config):
                     print("Training stopped early!")
                     break
 
-    test_loss = test(model, data, splits, device, args.batch_size)
+    test_loss = test(encoder, decoder, data, splits, device, args.batch_size)
 
     # Save results to CSV with mean and variance
     save_to_csv(f'./results/LINKX2{args.h_key}_{args.dataset}.csv',

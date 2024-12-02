@@ -11,15 +11,34 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from matplotlib import pyplot as plt
 
 
-def visualize(pred, true_label, save_path='./visualization.png'):
 
+def save_to_csv(file_path,
+                model_name,
+                node_feat,
+                heuristic,
+                test_loss):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    file_exists = os.path.isfile(file_path)
+    with open(file_path, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            writer.writerow(['Model', 'NodeFeat', 'Heuristic', 'Test_Loss'])
+        writer.writerow([model_name, node_feat, heuristic, test_loss])
+    print(f'Saved {model_name, node_feat, heuristic, test_loss} to '
+          f'{file_path}')
+
+
+def visualize(pred, true_label, save_path='./visualization.png'):
     pred = pred.cpu().detach().numpy()
     true_label = true_label.cpu().detach().numpy()
     plt.figure(figsize=(10, 6))
-    plt.scatter(np.arange(len(true_label)), true_label, color='#A6CEE3', label='True label', alpha=0.6)
-    plt.scatter(np.arange(len(pred)), pred, color='#B2DF8A', label='Prediction', alpha=0.6)
+    plt.scatter(np.arange(len(true_label)), true_label, color='#A6CEE3',
+                label='True Score',
+                alpha=0.6)
+    plt.scatter(np.arange(len(pred)), pred, color='#B2DF8A',
+                label='Prediction', alpha=0.6)
 
-    plt.title('Predictions vs True label')
+    plt.title('Predictions vs True Score')
     plt.xlabel('Sample Index')
     plt.ylabel('Value')
     plt.ylim(0, 1.5)

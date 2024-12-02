@@ -173,46 +173,6 @@ class GraphSAGE(torch.nn.Module):
         return x
 
 
-class mlp_model(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers,
-                 dropout, data_name=None):
-        super(mlp_model, self).__init__()
-
-        self.lins = torch.nn.ModuleList()
-
-        if num_layers == 1:
-            self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
-        else:
-            self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
-            for _ in range(num_layers - 2):
-                self.lins.append(
-                    torch.nn.Linear(hidden_channels, hidden_channels)
-                )
-            self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
-
-        self.dropout = dropout
-        self.invest = 1
-        self.num_layers = num_layers
-
-    def reset_parameters(self):
-        for lin in self.lins:
-            lin.reset_parameters()
-
-    def forward(self, x, adj_t=None):
-        if self.invest == 1:
-            print('layers in mlp: ', len(self.lins))
-            self.invest = 0
-
-        for lin in self.lins[:-1]:
-            x = lin(x)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-
-        x = self.lins[-1](x)
-
-        return x.squeeze()
-
-
 class GIN_Variant(torch.nn.Module):
     def __init__(self,
                  in_channels,
@@ -401,58 +361,7 @@ class GAE4LP(torch.nn.Module):
         return pos_loss + neg_loss
 
 
-class DotProduct(torch.nn.Module):
-    def forward(self, x, y):
-        return x * y
-    
-    
-class InnerProduct(torch.nn.Module):
-    def forward(self, x, y, sigmoid=True):
-        value = (x * y).sum(dim=1)
-        return torch.sigmoid(value) if sigmoid else value
 
-
-product_dict = {'inner': InnerProduct(), 'dot': DotProduct()}
-
-
-class LinkPredictor(torch.nn.Module):
-    def __init__(self,
-                 in_channels,
-                 hidden_channels,
-                 out_channels,
-                 num_layers,
-                 dropout,
-                 product):
-        super(LinkPredictor, self).__init__()
-
-        self.lins = torch.nn.ModuleList()
-        if num_layers == 1:
-            self.lins.append(torch.nn.Linear(in_channels, out_channels))
-        else:
-            self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
-            for _ in range(num_layers - 2):
-                self.lins.append(
-                    torch.nn.Linear(hidden_channels, hidden_channels)
-                )
-            self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
-
-        self.dropout = dropout
-        self.product = product_dict[product]
-
-    def reset_parameters(self):
-        for lin in self.lins:
-            lin.reset_parameters()
-
-    def forward(self, h1, h2):
-        x = self.product(h1, h2)
-
-        for lin in self.lins[:-1]:
-            x = lin(x)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.lins[-1](x)
-        return torch.sigmoid(x)
-    
 
 class GCN(torch.nn.Module):
     def __init__(self, in_channels, 
@@ -509,7 +418,11 @@ class SAGE(torch.nn.Module):
 
 
 class LinkPredictor(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
+    def __init__(self, in_channels, 
+                 hidden_channels, 
+                 out_channels,
+                 num_layers, 
+                 dropout):
         super(LinkPredictor, self).__init__()
 
         self.lins = torch.nn.ModuleList()
@@ -532,5 +445,6 @@ class LinkPredictor(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.lins[-1](x)
         return torch.sigmoid(x)
+    
     
     
