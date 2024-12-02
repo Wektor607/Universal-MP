@@ -16,7 +16,7 @@ from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import AA, RA, Ben_PPR, katz_apro
 from baselines.heuristic import CN as CommonNeighbor
-from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE4LP, InnerProduct, mlp_score
+from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant, GAE4LP, InnerProduct, LinkPredictor
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
 from torch.utils.data import DataLoader
@@ -43,23 +43,23 @@ def create_GAE_model(cfg_model: CN,
         raise NotImplementedError('Current model does not exist')
         # model = create_model(cfg_model)
 
-    elif model_name == 'GAT_Variant':
-        encoder = GAT_Variant(cfg_model.in_channels,
+    elif model_name == 'Custom_GAT':
+        encoder = Custom_GAT(cfg_model.in_channels,
                               cfg_model.hidden_channels,
                               cfg_model.out_channels,
                               cfg_model.num_layers,
                               cfg_model.dropout,
                               cfg_model.heads,
                               )
-    elif model_name == 'GCN_Variant':
-        encoder = GCN_Variant(cfg_model.in_channels,
+    elif model_name == 'Custom_GCN':
+        encoder = Custom_GCN(cfg_model.in_channels,
                               cfg_model.hidden_channels,
                               cfg_model.out_channels,
                               cfg_model.num_layers,
                               cfg_model.dropout,
                               )
-    elif model_name == 'SAGE_Variant':
-        encoder = SAGE_Variant(cfg_model.in_channels,
+    elif model_name == 'GraphSAGE':
+        encoder = GraphSAGE(cfg_model.in_channels,
                                cfg_model.hidden_channels,
                                cfg_model.out_channels,
                                cfg_model.num_layers,
@@ -74,7 +74,7 @@ def create_GAE_model(cfg_model: CN,
                               cfg_model.mlp_layer
                               )
     if cfg_score.product == 'dot':
-        decoder = mlp_score(cfg_model.out_channels,
+        decoder = LinkPredictor(cfg_model.out_channels,
                             cfg_score.score_hidden_channels,
                             cfg_score.score_out_channels,
                             cfg_score.score_num_layers,
@@ -302,7 +302,7 @@ def experiment_loop(args: Config):
 
     early_stopping = EarlyStopping(patience=20, verbose=True)
 
-    if args.model in ['GCN_Variant', 'GAT_Variant', 'SAGE_Variant', 'GIN_Variant']:
+    if args.model in ['Custom_GCN', 'Custom_GAT', 'GraphSAGE', 'GIN_Variant']:
         model = create_GAE_model(cfg_model, cfg_score, args.model).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -328,7 +328,7 @@ def experiment_loop(args: Config):
 if __name__ == "__main__":
 
     args = Config()
-    for model in ['GIN_Variant', 'SAGE_Variant', 'GCN_Variant']:
+    for model in ['GIN_Variant', 'GraphSAGE', 'Custom_GCN']:
         args.model = model
         for node_feature in ['random', 'original', 'adjacency', 'one-hot']:
             args.node_feature = node_feature

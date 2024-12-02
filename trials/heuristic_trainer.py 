@@ -3,17 +3,14 @@ import sys
 import csv
 import time
 
-# Add the parent directory to the system path
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 )
 
-# General scientific computing libraries
 import numpy as np
 import scipy.sparse as ssp
 from matplotlib import pyplot as plt
 
-# PyTorch and related libraries
 import torch
 import torch.nn.functional as F
 from torch.nn import BCEWithLogitsLoss
@@ -24,11 +21,9 @@ from sklearn.metrics import roc_auc_score
 from torch_geometric.utils import negative_sampling
 from ogb.linkproppred import Evaluator
 
-# tqdm for progress tracking
 from tqdm import tqdm
 from yacs.config import CfgNode
 
-# Custom imports
 from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import (
@@ -36,8 +31,8 @@ from baselines.heuristic import (
     CN as CommonNeighbor
 )
 from baselines.GNN import (
-    GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant,
-    GAE4LP, InnerProduct, mlp_score
+    Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant,
+    GAE4LP, InnerProduct, LinkPredictor
 )
 from baselines.LINKX import LINKX
 from archiv.mlp_heuristic_main import EarlyStopping

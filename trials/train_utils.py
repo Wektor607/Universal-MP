@@ -36,8 +36,8 @@ from baselines.heuristic import (
     CN as CommonNeighbor
 )
 from baselines.GNN import (
-    GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant,
-    GAE4LP, InnerProduct, mlp_score
+    Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant,
+    GAE4LP, InnerProduct, LinkPredictor
 )
 from baselines.LINKX import LINKX
 from archiv.mlp_heuristic_main import EarlyStopping

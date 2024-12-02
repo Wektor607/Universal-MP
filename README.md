@@ -1,4 +1,4 @@
-# Heuristic Learning Graph Neural Network (HL-GNN)
+# Universal MPNN
 
 This repository contains the official implementation of Universal-MPNN, as presented in the paper [""]().
 

@@ -7,7 +7,7 @@ from torch_geometric.nn import global_sort_pool
 from torch.nn import Module
 
 
-class GCN_Variant(torch.nn.Module):
+class Custom_GCN(torch.nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_channels,
@@ -15,7 +15,7 @@ class GCN_Variant(torch.nn.Module):
                  num_layers,
                  dropout,
                  data_name=None):
-        super(GCN_Variant, self).__init__()
+        super(Custom_GCN, self).__init__()
 
         self.convs = torch.nn.ModuleList()
 
@@ -71,7 +71,7 @@ class GCN_Variant(torch.nn.Module):
         return x
 
 
-class GAT_Variant(torch.nn.Module):
+class Custom_GAT(torch.nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_channels,
@@ -80,7 +80,7 @@ class GAT_Variant(torch.nn.Module):
                  dropout,
                  head=None,
                  data_name=None):
-        super(GAT_Variant, self).__init__()
+        super(Custom_GAT, self).__init__()
 
         self.hidden_channels = hidden_channels
         self.out_channels = out_channels
@@ -133,14 +133,14 @@ class GAT_Variant(torch.nn.Module):
         return x
 
 
-class SAGE_Variant(torch.nn.Module):
+class GraphSAGE(torch.nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_channels,
                  out_channels,
                  num_layers,
                  dropout):
-        super(SAGE_Variant, self).__init__()
+        super(GraphSAGE, self).__init__()
 
         self.convs = torch.nn.ModuleList()
 
@@ -363,7 +363,7 @@ class DGCNN(torch.nn.Module):
         return x
 
 
-class GAE_forall(torch.nn.Module):
+class GAE4LP(torch.nn.Module):
     """graph auto encoder。
     """
 
@@ -415,7 +415,7 @@ class InnerProduct(torch.nn.Module):
 product_dict = {'inner': InnerProduct(), 'dot': DotProduct()}
 
 
-class mlp_score(torch.nn.Module):
+class LinkPredictor(torch.nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_channels,
@@ -423,7 +423,7 @@ class mlp_score(torch.nn.Module):
                  num_layers,
                  dropout,
                  product):
-        super(mlp_score, self).__init__()
+        super(LinkPredictor, self).__init__()
 
         self.lins = torch.nn.ModuleList()
         if num_layers == 1:

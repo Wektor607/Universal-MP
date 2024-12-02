@@ -2,27 +2,25 @@
 import os
 import sys
 import csv
-
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-)
-
 import scipy.sparse as ssp
 import torch
 import torch.nn.functional as F
 import time
 from matplotlib import pyplot as plt
 import numpy as np
-
 from yacs.config import CfgNode
+from train_utils import train, valid, test
 
-from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+)
 from baselines.heuristic import AA, RA, Ben_PPR, katz_apro, shortest_path
 from baselines.heuristic import CN as CommonNeighbor
 from baselines.GNN import (
-    GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, 
-    GAE4LP, InnerProduct, mlp_score
+    Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant, 
+    GAE4LP, InnerProduct, LinkPredictor
 )
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
@@ -59,7 +57,7 @@ def init_LINKX(
             num_node_layers=cfg_model.num_node_layers,
         )
 
-    decoder = mlp_score(cfg_model.out_channels,
+    decoder = LinkPredictor(cfg_model.out_channels,
                         cfg_score.score_hidden_channels,
                         cfg_score.score_out_channels,
                         cfg_score.score_num_layers,
@@ -171,6 +169,7 @@ def experiment_loop(args: Config):
         splits[key]['pos_edge_score'] = torch.sigmoid(pos_edge_score)
         splits[key]['neg_edge_score'] = torch.sigmoid(neg_edge_score)
 
+    # refine it as class and save into .npz
     # Store results of each experiment
     early_stopping = EarlyStopping(patience=5, verbose=True)
 
