@@ -23,8 +23,10 @@ from baselines.GNN import  LinkPredictor, GAE4LP
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
 from baselines.LINKX import LINKX
-from train_utils import train, valid, test
+from train_utils import  test
 from utils import save_to_csv, visualize
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
 
 class Config:
     def __init__(self):
@@ -39,33 +41,127 @@ class Config:
                                         # 'quasi-orthogonal', 'adjacency'
         self.use_early_stopping = True
 
+        # optimizers
+        self.lr = 0.01
+        self.weight_decay = 0.0005
 
-def init_LINKX(
-    cfg_encoder: CN,
-    cfg_decoder: CN,
-    m_name: str):
-    # split them into two models 
-    # https://github.com/Barcavin/efficient-node-labelling/blob/master/main.py
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from torch_sparse import SparseTensor
+from tqdm import tqdm 
+
+from torch import Tensor
+from torch_sparse import SparseTensor
+
+def spmdiff_efficient(adj1: SparseTensor, adj2: SparseTensor, keep_val: bool = False) -> SparseTensor:
+    """
+    Efficiently return the elements in adj1 but not in adj2.
+    """
+    # Ensure the input tensors have the same dimensions
+    assert adj1.sizes() == adj2.sizes(), "Sparse tensors must have the same dimensions"
     
-    if m_name in ['LINKX']:
-        encoder = LINKX(
-            num_nodes=cfg_encoder.num_nodes,
-            in_channels=cfg_encoder.in_channels,
-            hidden_channels=cfg_encoder.hidden_channels,
-            out_channels=cfg_encoder.out_channels,
-            num_layers=cfg_encoder.num_layers,
-            num_edge_layers=cfg_encoder.num_edge_layers,
-            num_node_layers=cfg_encoder.num_node_layers,
+    row1, col1, val1 = adj1.coo()
+    row2, col2, val2 = adj2.coo()
+
+    keys1 = row1 * adj1.size(1) + col1  # Encode 2D indices into unique 1D keys
+    keys2 = row2 * adj2.size(1) + col2
+
+    mask1 = ~torch.isin(keys1, keys2)  # Mask elements in adj1 not found in adj2
+    row_diff = row1[mask1]
+    col_diff = col1[mask1]
+
+    val1 = val1 if val1 is not None else torch.ones_like(row1, dtype=torch.float)
+    val2 = val2 if val2 is not None else torch.ones_like(row2, dtype=torch.float)
+            
+    if keep_val:
+        val_diff = val1[mask1]
+        return SparseTensor.from_edge_index(
+            torch.stack([row_diff, col_diff], dim=0),
+            val_diff,
+            adj1.sizes()
+        )
+    else:
+        return SparseTensor.from_edge_index(
+            torch.stack([row_diff, col_diff], dim=0),
+            None,
+            adj1.sizes()
         )
 
-    decoder = LinkPredictor(cfg_encoder.out_channels,
-                        cfg_decoder.score_hidden_channels,
-                        cfg_decoder.score_out_channels,
-                        cfg_decoder.score_num_layers,
-                        cfg_decoder.score_dropout)
+@torch.no_grad()
+def valid_cn(encoder, predictor, data, splits, batch_size, device):
+         
+    encoder.eval()
+    predictor.eval()
 
-    return GAE4LP(encoder=encoder, decoder=decoder)
+    pos_valid_edge = splits['pos_edge_label_index'].to(device)
+    neg_valid_edge = splits['neg_edge_label_index'].to(device)
+    pos_edge_label = splits['pos_edge_score'].to(device)
+    neg_edge_label = splits['neg_edge_score'].to(device)
 
+
+    for perm in tqdm(DataLoader(range(pos_valid_edge.size(0)), batch_size,
+                           shuffle=True), desc='Valid/Test'):
+        edge = pos_valid_edge[perm].t() 
+        
+        h = encoder(data.x, data.full_adj_t)
+        neg_edge = neg_valid_edge[:, perm]
+        
+        pos_pred = predictor(h, edge).squeeze()
+        neg_pred = predictor(h, neg_edge).squeeze()
+
+        pos_loss = F.mse_loss(pos_pred, pos_edge_label[perm])
+        neg_loss = F.mse_loss(neg_pred, neg_edge_label[perm])
+        loss = pos_loss + neg_loss
+
+    return loss.item()
+
+
+def train_cn(encoder, predictor, optimizer, data, split_edge, batch_size, mask_target=True):
+    encoder.train()
+    predictor.train()
+    
+    device = data.adj_t.device()
+
+    pos_train_edge = split_edge['train']['pos_edge_label_index'].to(device)
+    neg_edge_epoch = split_edge['train']['neg_edge_label_index'].to(device)
+    pos_edge_label = split_edge['train']['pos_edge_score'].to(device)
+    neg_edge_label = split_edge['train']['neg_edge_score'].to(device)
+
+    optimizer.zero_grad()
+
+    for perm in tqdm(DataLoader(range(pos_train_edge.size(0)), batch_size,
+                           shuffle=True), desc='Train'):
+        edge = pos_train_edge[perm].t()
+        if mask_target:
+            
+            adj_t = data.adj_t
+            undirected_edges = torch.cat((edge, edge.flip(0)), dim=-1)
+            target_adj = SparseTensor.from_edge_index(undirected_edges, sparse_sizes=adj_t.sizes())
+            adj_t = spmdiff_efficient(adj_t, target_adj, keep_val=True)
+        else:
+            adj_t = data.adj_t
+
+        h = encoder(data.x, adj_t)
+        neg_edge = neg_edge_epoch[:,perm]
+        
+        pos_pred = predictor(h, edge).squeeze()
+        neg_pred = predictor(h, neg_edge).squeeze()
+
+        pos_loss = F.mse_loss(pos_pred, pos_edge_label[perm])
+        neg_loss = F.mse_loss(neg_pred, neg_edge_label[perm])
+        loss = pos_loss + neg_loss
+
+        loss.backward()
+
+        if data.x is not None:
+            torch.nn.utils.clip_grad_norm_(data.x, 1.0)
+        torch.nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
+        optimizer.step()
+        optimizer.zero_grad()
+    
+    return loss.item()
 
 
 def experiment_loop(args: Config):
@@ -99,7 +195,7 @@ def experiment_loop(args: Config):
         )
 
     # Initialize model configuration
-    with open('yamls/cora/heart_gnn_models.yaml', "r") as f:
+    with open(ROOT + '/exp1_gnn.yaml', "r") as f:
         cfg = CfgNode.load_cfg(f)
 
     cfg_encoder = eval(f'cfg.model.{args.model}')
@@ -165,17 +261,16 @@ def experiment_loop(args: Config):
     total_params = sum(p.numel() for param in parameters for p in param)
     print(f'Total number of parameters is {total_params}')
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        train_loss = train(
-            encoder, decoder, optimizer, data, splits, device, args.batch_size
+        data.adj_t = SparseTensor.from_edge_index(splits['train'].edge_index)
+        train_loss = train_cn(
+            encoder, decoder, optimizer, data, splits, args.batch_size
         )
 
         # Validate every 20 epochs
         if epoch % 20 == 0:
-            valid_loss = valid(encoder, decoder, data, splits, device, args.batch_size)
+            valid_loss = valid_cn(encoder, decoder, data, splits['valid'], args.batch_size, device)
             print(
                 f'Epoch: {epoch:03d}, train loss: {train_loss:.4f}, '
                 f'valid loss: {valid_loss:.4f}, '
@@ -186,8 +281,9 @@ def experiment_loop(args: Config):
                 if early_stopping.early_stop:
                     print("Training stopped early!")
                     break
-
-    test_loss = test(encoder, decoder, data, splits, device, args.batch_size)
+                
+    data.adj_t = data.full_adj_t
+    test_loss = valid_cn(encoder, decoder, data, splits['test'], args.batch_size, device)
 
     # Save results to CSV with mean and variance
     save_to_csv(f'./results/LINKX2{args.h_key}_{args.dataset}.csv',
@@ -195,8 +291,8 @@ def experiment_loop(args: Config):
                 args.node_feature,
                 args.h_key,
                 test_loss)
+    
 
-    print('Saved mean and variance of test loss to CSV.')
 
 
 if __name__ == "__main__":

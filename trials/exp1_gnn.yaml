@@ -2,9 +2,7 @@
 
 out_dir: results
 metric_best: [Hits@10, MRR, AUC]
-cfg_dest: heart_gnn_unified.yaml
-print: file
-seed: 0
+cfg_dest: heart_gnn_models.yaml
 
 run:
   seed: 0
@@ -25,8 +23,7 @@ train:
   finetune : False
 
 model:
-  type: Custom_GCN
-  sampler: gsaint
+  type: LINKX
 
   batch_size_sampler: 1024
   Custom_GCN: 
@@ -55,7 +52,7 @@ model:
     dropout: 0
     emb: False
 
-  GIN_Variant:
+  Custom_GIN:
     out_channels: 64
     hidden_channels: 64
     dropout: 0
