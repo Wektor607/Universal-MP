@@ -16,7 +16,7 @@ from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import AA, RA, Ben_PPR, katz_apro
 from baselines.heuristic import CN as CommonNeighbor
-from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant, GAE4LP, InnerProduct, LinkPredictor
+from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, Custom_GIN, GAE4LP,  LinkPredictor
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
 from torch.utils.data import DataLoader
@@ -30,7 +30,7 @@ class Config:
         self.batch_size = 8192
         self.heuristic = "PPR"
         self.gnn = "gcn"
-        self.model = "GIN_Variant"
+        self.model = "Custom_GIN"
         self.use_feature = False
         self.node_feature = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
         self.use_early_stopping = True
@@ -65,8 +65,8 @@ def create_GAE_model(cfg_encoder: CN,
                                cfg_encoder.num_layers,
                                cfg_encoder.dropout,
                                )
-    elif model_name == 'GIN_Variant':
-        encoder = GIN_Variant(cfg_encoder.in_channels,
+    elif model_name == 'Custom_GIN':
+        encoder = Custom_GIN(cfg_encoder.in_channels,
                               cfg_encoder.hidden_channels,
                               cfg_encoder.out_channels,
                               cfg_encoder.num_layers,
@@ -80,8 +80,6 @@ def create_GAE_model(cfg_encoder: CN,
                             cfg_decoder.score_num_layers,
                             cfg_decoder.score_dropout,
                             cfg_decoder.product)
-    elif cfg_decoder.product == 'inner':
-        decoder = InnerProduct()
 
     else:
         # Without this else I got: UnboundLocalError: local variable 'model' referenced before assignment
@@ -302,7 +300,7 @@ def experiment_loop(args: Config):
 
     early_stopping = EarlyStopping(patience=20, verbose=True)
 
-    if args.model in ['Custom_GCN', 'Custom_GAT', 'GraphSAGE', 'GIN_Variant']:
+    if args.model in ['Custom_GCN', 'Custom_GAT', 'GraphSAGE', 'Custom_GIN']:
         model = create_GAE_model(cfg_encoder, cfg_decoder, args.model).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -328,7 +326,7 @@ def experiment_loop(args: Config):
 if __name__ == "__main__":
 
     args = Config()
-    for model in ['GIN_Variant', 'GraphSAGE', 'Custom_GCN']:
+    for model in ['Custom_GIN', 'GraphSAGE', 'Custom_GCN']:
         args.model = model
         for node_feature in ['random', 'original', 'adjacency', 'one-hot']:
             args.node_feature = node_feature

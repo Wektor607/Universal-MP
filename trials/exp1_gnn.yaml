@@ -96,7 +96,7 @@ score:
     product: inner
 
 
-  GIN_Variant:
+  Custom_GIN:
     score_in_channels: 64
     score_hidden_channels: 64
     score_num_layers_predictor: 3

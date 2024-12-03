@@ -6,25 +6,30 @@ import scipy.sparse as ssp
 import torch
 import torch.nn.functional as F
 import time
-from matplotlib import pyplot as plt
-import numpy as np
 from yacs.config import CfgNode
 from pprint import pprint 
-from train_utils import train, valid, test
-
-from baselines.utils import loaddataset
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 )
 from baselines.heuristic import AA, RA, Ben_PPR, katz_apro, shortest_path
 from baselines.heuristic import CN as CommonNeighbor
-from baselines.GNN import  LinkPredictor, GAE4LP
+
+
+from baselines.GNN import LinkPredictor
 from yacs.config import CfgNode as CN
 from archiv.mlp_heuristic_main import EarlyStopping
 from baselines.LINKX import LINKX
-from train_utils import  test
+from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, Custom_GIN
+from baselines.utils import loaddataset
 from utils import save_to_csv, visualize
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from torch_sparse import SparseTensor
+from tqdm import tqdm 
+from utils import set_random_seeds
+import argparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -45,14 +50,35 @@ class Config:
         self.lr = 0.01
         self.weight_decay = 0.0005
 
-import torch
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from torch_sparse import SparseTensor
-from tqdm import tqdm 
 
-from torch import Tensor
-from torch_sparse import SparseTensor
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Configuration for training.")
+
+    # Training parameters
+    parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs.")
+    parser.add_argument('--dataset', type=str, default="ddi", help="Dataset to use.")
+    parser.add_argument('--batch_size', type=int, default=8192, help="Batch size for training.")
+    parser.add_argument('--h_key', type=str, default="CN", help="Heuristic key to use.")
+    parser.add_argument('--gnn', type=str, default="gcn", help="GNN type to use.")
+    parser.add_argument('--model', type=str, default="Custom_GIN", 
+                        choices = ["LINKX", "Custom_GAT", "Custom_GCN", "GraphSAGE", "Custom_GIN"], 
+                        help="Model type to use.")
+    parser.add_argument('--use_feature', action='store_true', help="Use node features.")
+    parser.add_argument('--node_feature', type=str, default="original", 
+                        choices=['original', 'one-hot', 'random', 'quasi-orthogonal', 'adjacency'],
+                        help="Type of node features to use.")
+
+    # Early stopping
+    parser.add_argument('--use_early_stopping', action='store_true', help="Enable early stopping.")
+
+    # Optimizer parameters
+    parser.add_argument('--lr', type=float, default=0.01, help="Learning rate.")
+    parser.add_argument('--weight_decay', type=float, default=0.0005, help="Weight decay for optimizer.")
+
+    return parser.parse_args()
+
+
 
 def spmdiff_efficient(adj1: SparseTensor, adj2: SparseTensor, keep_val: bool = False) -> SparseTensor:
     """
@@ -99,20 +125,24 @@ def valid_cn(encoder, predictor, data, splits, batch_size, device):
     pos_edge_label = splits['pos_edge_score'].to(device)
     neg_edge_label = splits['neg_edge_score'].to(device)
 
+    data_loader = DataLoader(range(pos_valid_edge.size(0)), batch_size=batch_size, shuffle=True)
 
-    for perm in tqdm(DataLoader(range(pos_valid_edge.size(0)), batch_size,
-                           shuffle=True), desc='Valid/Test'):
-        edge = pos_valid_edge[perm].t() 
+    with tqdm(total=len(data_loader), desc='Valid/Test') as pbar:
+        for perm in data_loader:
+            # Your processing code here
+            pbar.update(1)
         
-        h = encoder(data.x, data.full_adj_t)
-        neg_edge = neg_valid_edge[:, perm]
-        
-        pos_pred = predictor(h, edge).squeeze()
-        neg_pred = predictor(h, neg_edge).squeeze()
+            edge = pos_valid_edge[perm].t() 
+            
+            h = encoder(data.x, data.full_adj_t)
+            neg_edge = neg_valid_edge[:, perm]
+            
+            pos_pred = predictor(h, edge).squeeze()
+            neg_pred = predictor(h, neg_edge).squeeze()
 
-        pos_loss = F.mse_loss(pos_pred, pos_edge_label[perm])
-        neg_loss = F.mse_loss(neg_pred, neg_edge_label[perm])
-        loss = pos_loss + neg_loss
+            pos_loss = F.mse_loss(pos_pred, pos_edge_label[perm])
+            neg_loss = F.mse_loss(neg_pred, neg_edge_label[perm])
+            loss = pos_loss + neg_loss
 
     return loss.item()
 
@@ -132,6 +162,7 @@ def train_cn(encoder, predictor, optimizer, data, split_edge, batch_size, mask_t
 
     for perm in tqdm(DataLoader(range(pos_train_edge.size(0)), batch_size,
                            shuffle=True), desc='Train'):
+        
         edge = pos_train_edge[perm].t()
         if mask_target:
             
@@ -234,10 +265,10 @@ def experiment_loop(args: Config):
     # Store results of each experiment
     early_stopping = EarlyStopping(patience=5, verbose=True)
 
+    cfg_encoder.in_channels = data.x.size(-1)
+    cfg_encoder.num_nodes = data.num_nodes
+        
     if args.model == 'LINKX':
-        cfg_encoder.in_channels = data.x.size(-1)
-        cfg_encoder.num_nodes = data.num_nodes
-
         encoder = LINKX(
             num_nodes=cfg_encoder.num_nodes,
             in_channels=cfg_encoder.in_channels,
@@ -248,11 +279,45 @@ def experiment_loop(args: Config):
             num_node_layers=cfg_encoder.num_node_layers,
         )
 
-        decoder = LinkPredictor(cfg_encoder.out_channels,
-                    cfg_decoder.score_hidden_channels,
-                    cfg_decoder.score_out_channels,
-                    cfg_decoder.score_num_layers,
-                    cfg_decoder.score_dropout)
+    if args.model == 'Custom_GAT':
+        encoder = Custom_GAT(cfg_encoder.in_channels,
+                              cfg_encoder.hidden_channels,
+                              cfg_encoder.out_channels,
+                              cfg_encoder.num_layers,
+                              cfg_encoder.dropout,
+                              cfg_encoder.heads,
+                              )
+        
+    if args.model == 'Custom_GCN':
+        encoder = Custom_GCN(cfg_encoder.in_channels,
+                              cfg_encoder.hidden_channels,
+                              cfg_encoder.out_channels,
+                              cfg_encoder.num_layers,
+                              cfg_encoder.dropout,
+                              )
+        
+    if args.model == 'GraphSAGE':
+        encoder = GraphSAGE(cfg_encoder.in_channels,
+                               cfg_encoder.hidden_channels,
+                               cfg_encoder.out_channels,
+                               cfg_encoder.num_layers,
+                               cfg_encoder.dropout,
+                               )
+        
+    if args.model == 'Custom_GIN':
+        encoder = Custom_GIN(cfg_encoder.in_channels,
+                              cfg_encoder.hidden_channels,
+                              cfg_encoder.out_channels,
+                              cfg_encoder.num_layers,
+                              cfg_encoder.dropout,
+                              cfg_encoder.mlp_layer
+                              )
+        
+    decoder = LinkPredictor(cfg_encoder.out_channels,
+                cfg_decoder.score_hidden_channels,
+                cfg_decoder.score_out_channels,
+                cfg_decoder.score_num_layers,
+                cfg_decoder.score_dropout)
 
     encoder.reset_parameters()
     decoder.reset_parameters()
@@ -260,6 +325,7 @@ def experiment_loop(args: Config):
     optimizer = torch.optim.Adam(parameters, lr=args.lr, weight_decay=args.weight_decay)
     total_params = sum(p.numel() for param in parameters for p in param)
     print(f'Total number of parameters is {total_params}')
+
 
     for epoch in range(1, args.epochs + 1):
         start = time.time()
@@ -282,11 +348,12 @@ def experiment_loop(args: Config):
                     print("Training stopped early!")
                     break
                 
+                
     data.adj_t = data.full_adj_t
     test_loss = valid_cn(encoder, decoder, data, splits['test'], args.batch_size, device)
 
     # Save results to CSV with mean and variance
-    save_to_csv(f'./results/LINKX2{args.h_key}_{args.dataset}.csv',
+    save_to_csv(f'./results/{args.model}2{args.h_key}_{args.dataset}.csv',
                 args.model,
                 args.node_feature,
                 args.h_key,
@@ -297,10 +364,12 @@ def experiment_loop(args: Config):
 
 if __name__ == "__main__":
 
-    args = Config()
-    for model in ['LINKX']:
-        args.model = model
-        for node_feature in ['original', 'one-hot', 'random', 'adjacency']:
-            args.node_feature = node_feature
-            for i in range(3):
-                experiment_loop(args)
+    args = parse_args()
+    print(args)
+
+    for node_feature in ['original', 'one-hot', 'random', 'adjacency']:
+        args.node_feature = node_feature
+        for i in range(3):
+            set_random_seeds(i)
+            experiment_loop(args)
+                

@@ -17,7 +17,7 @@ from sklearn.metrics import roc_auc_score
 from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import CN, AA, RA
-from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant, GAE4LP, InnerProduct, LinkPredictor
+from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, Custom_GIN, GAE4LP,  LinkPredictor
 
 from yacs.config import CfgNode as CN
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
