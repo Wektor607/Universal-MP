@@ -216,8 +216,12 @@ def experiment_loop(args: argparse.Namespace):
         neg_edge_score, _ = heuristic[args.h_key](
             A, splits[key]['neg_edge_label_index'], batch_size=args.batch_size
         )
-        splits[key]['pos_edge_score'] = torch.sigmoid(pos_edge_score)
-        splits[key]['neg_edge_score'] = torch.sigmoid(neg_edge_score)
+        
+        # Normalize the scores
+        max_score = pos_edge_score.max()
+        splits[key]['pos_edge_score'] = pos_edge_score / max_score
+        splits[key]['neg_edge_score'] = neg_edge_score / max_score
+
 
     # refine it as class and save into .npz
     # Store results of each experiment
