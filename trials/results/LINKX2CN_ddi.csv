@@ -1,2 +1,3 @@
 Model,NodeFeat,Heuristic,Test_Loss
 LINKX,adjacency,CN,0.02255026251077652
+LINKX,adjacency,CN,0.026016708463430405
