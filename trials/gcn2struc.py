@@ -328,7 +328,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Configuration for training.")
 
     # Training parameters
-    parser.add_argument('--epochs', type=int, default=10, help="Number of training epochs.")
+    parser.add_argument('--epochs', type=int, default=1, help="Number of training epochs.")
     parser.add_argument('--dataset', type=str, default="ddi", help="Dataset to use.")
     parser.add_argument('--batch_size', type=int, default=32, help="Batch size for training.")
     parser.add_argument('--h_key', type=str, default="CN", help="Heuristic key to use.")
@@ -366,9 +366,8 @@ if __name__ == "__main__":
                 "epochs": args.epochs,
                 "dataset": args.dataset,
                 "batch_size": args.batch_size,
-                "h_key": "CN",
-                "model": "LINKX",
-                "use_feature": False,
+                "h_key": args.h_key,
+                "model": args.model,
                 "lr": args.lr,
                 "weight_decay": 0
             })
