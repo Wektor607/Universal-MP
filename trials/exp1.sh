@@ -24,3 +24,7 @@ done
 wait
 
 python gcn2struc.py --model Custom_GAT
+python gcn2struc.py --model Custom_GCN
+python gcn2struc.py --model GraphSAGE
+python gcn2struc.py --model Custom_GIN
+python gcn2struc.py --model LINKX

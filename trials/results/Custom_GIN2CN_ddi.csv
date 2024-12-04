@@ -1,0 +1,5 @@
+Model,NodeFeat,Heuristic,Test_Loss
+Custom_GIN,adjacency,CN,0.06829717755317688
+Custom_GIN,original,CN,0.06829717755317688
+Custom_GIN,one-hot,CN,0.06829717755317688
+Custom_GIN,random,CN,0.06447390466928482

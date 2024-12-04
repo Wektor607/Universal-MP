@@ -334,7 +334,7 @@ def parse_args():
     # Training parameters
     parser.add_argument('--epochs', type=int, default=1, help="Number of training epochs.")
     parser.add_argument('--dataset', type=str, default="ddi", help="Dataset to use.")
-    parser.add_argument('--batch_size', type=int, default=32, help="Batch size for training.")
+    parser.add_argument('--batch_size', type=int, default=2**10, help="Batch size for training.")
     parser.add_argument('--h_key', type=str, default="CN", help="Heuristic key to use.")
     parser.add_argument('--gnn', type=str, default="gcn", help="GNN type to use.")
     parser.add_argument('--model', type=str, default="Custom_GAT", 
@@ -363,7 +363,7 @@ if __name__ == "__main__":
 
     for node_feature in ['adjacency', 'original', 'one-hot', 'random']:
         args.node_feature = node_feature
-        for i in range(8):
+        for i in range(1):
             set_random_seeds(i)
 
             wandb.init(project="graph-link-prediction", config={

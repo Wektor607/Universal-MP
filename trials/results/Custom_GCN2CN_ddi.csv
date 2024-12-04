@@ -1,0 +1,5 @@
+Model,NodeFeat,Heuristic,Test_Loss
+Custom_GCN,adjacency,CN,0.07030794024467468
+Custom_GCN,original,CN,0.07012128829956055
+Custom_GCN,one-hot,CN,0.014355763792991638
+Custom_GCN,random,CN,0.005369515158236027
