@@ -17,7 +17,7 @@ from sklearn.metrics import roc_auc_score
 from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import CN, AA, RA, Ben_PPR, katz_apro
-from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, GIN_Variant, GAE4LP, InnerProduct, LinkPredictor
+from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, Custom_GIN, GAE4LP,  LinkPredictor
 from archiv.mlp_heuristic_main import EarlyStopping
 from utils import EarlyStopping, visualize
 from baselines.heuristic import CN as CommonNeighbor

@@ -5,6 +5,19 @@ import math
 from torch.nn import (ModuleList, Linear, Conv1d, MaxPool1d, Embedding)
 from torch_geometric.nn import global_sort_pool
 from torch.nn import Module
+    
+import math
+
+import torch
+from torch import Tensor
+from torch.nn import BatchNorm1d, Parameter
+
+from torch_geometric.nn import inits
+from torch_geometric.nn.conv import MessagePassing
+from torch_geometric.nn.models import MLP
+from torch_geometric.typing import Adj, OptTensor
+from torch_geometric.utils import spmm
+
 
 
 class Custom_GCN(torch.nn.Module):
@@ -171,6 +184,66 @@ class GraphSAGE(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.convs[-1](x, adj_t)
         return x
+ 
+
+class MLPModel(torch.nn.Module):
+    """
+    A simple Multi-Layer Perceptron (MLP) model with customizable layers and dropout.
+
+    Args:
+        in_channels (int): Input feature dimension.
+        hidden_channels (int): Hidden layer dimension.
+        out_channels (int): Output feature dimension.
+        num_layers (int): Total number of layers (including input and output layers).
+        dropout (float): Dropout rate between layers.
+        data_name (str, optional): Name of the dataset (for logging/debugging purposes).
+    """
+    def __init__(self, in_channels, 
+                 hidden_channels, 
+                 out_channels, 
+                 num_layers, 
+                 dropout):
+        super(MLPModel, self).__init__()
+
+        self.layers = torch.nn.ModuleList()
+        self.dropout = dropout
+
+        self.layers.append(torch.nn.Linear(in_channels, hidden_channels if num_layers > 1 else out_channels))
+
+        for _ in range(num_layers - 2):
+            self.layers.append(torch.nn.Linear(hidden_channels, hidden_channels))
+
+        if num_layers > 1:
+            self.layers.append(torch.nn.Linear(hidden_channels, out_channels))
+
+        self.num_layers = num_layers
+
+    def reset_parameters(self):
+        """
+        Resets parameters for all layers.
+        """
+        for layer in self.layers:
+            layer.reset_parameters()
+            
+    def forward(self, x):
+        """
+        Forward pass through the MLP model.
+
+        Args:
+            x (Tensor): Input feature matrix of shape (N, in_channels).
+            adj_t (Tensor, optional): Sparse adjacency tensor (not used in this model).
+
+        Returns:
+            Tensor: Output feature matrix.
+        """
+
+        for layer in self.layers[:-1]:
+            x = layer(x)
+            x = F.relu(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+
+        x = self.layers[-1](x)  
+        return x.squeeze()
 
 
 class Custom_GIN(torch.nn.Module):
@@ -181,31 +254,23 @@ class Custom_GIN(torch.nn.Module):
                  num_layers,
                  dropout,
                  mlp_layer=None, data_name=None):
-        super(GIN_Variant, self).__init__()
+        super(Custom_GIN, self).__init__()
         self.convs = torch.nn.ModuleList()
         gin_mlp_layer = mlp_layer
 
-        if num_layers == 1:
-            self.mlp = mlp_model(
-                in_channels, hidden_channels, hidden_channels, 
-                gin_mlp_layer, dropout
-            )
+        self.mlp1 = MLPModel(
+            in_channels, hidden_channels, hidden_channels, 
+            gin_mlp_layer, dropout
+        )
+        self.convs.append(GINConv(self.mlp1))
+        for _ in range(num_layers - 2):
+            self.mlp = MLPModel(hidden_channels, hidden_channels, 
+                                    hidden_channels, gin_mlp_layer, dropout)
             self.convs.append(GINConv(self.mlp))
 
-        else:
-            self.mlp1 = mlp_model(
-                in_channels, hidden_channels, hidden_channels, 
-                gin_mlp_layer, dropout
-            )
-            self.convs.append(GINConv(self.mlp1))
-            for _ in range(num_layers - 2):
-                self.mlp = mlp_model(hidden_channels, hidden_channels, 
-                                     hidden_channels, gin_mlp_layer, dropout)
-                self.convs.append(GINConv(self.mlp))
-
-            self.mlp2 = mlp_model(hidden_channels, hidden_channels, 
-                                  out_channels, gin_mlp_layer, dropout)
-            self.convs.append(GINConv(self.mlp2))
+        self.mlp2 = MLPModel(hidden_channels, hidden_channels, 
+                                out_channels, gin_mlp_layer, dropout)
+        self.convs.append(GINConv(self.mlp2))
 
         self.dropout = dropout
         self.invest = 1
@@ -213,13 +278,10 @@ class Custom_GIN(torch.nn.Module):
     def reset_parameters(self):
         for conv in self.convs:
             conv.reset_parameters()
-        # self.mlp1.reset_parameters()
-        # self.mlp2.reset_parameters()
+        self.mlp1.reset_parameters()
+        self.mlp2.reset_parameters()
 
     def forward(self, x, adj_t):
-        if self.invest == 1:
-            print('layers in gin: ', len(self.convs))
-            self.invest = 0
 
         for conv in self.convs[:-1]:
             x = conv(x, adj_t)
@@ -361,62 +423,6 @@ class GAE4LP(torch.nn.Module):
         return pos_loss + neg_loss
 
 
-
-
-class GCN(torch.nn.Module):
-    def __init__(self, in_channels, 
-                 hidden_channels, 
-                 out_channels, 
-                 num_layers, 
-                 dropout):
-        super(GCN, self).__init__()
-
-        self.convs = torch.nn.ModuleList()
-        self.convs.append(GCNConv(in_channels, hidden_channels, cached=True))
-        for _ in range(num_layers - 2):
-            self.convs.append(GCNConv(hidden_channels, hidden_channels, cached=True))
-        self.convs.append(GCNConv(hidden_channels, out_channels, cached=True))
-
-        self.dropout = dropout
-
-    def reset_parameters(self):
-        for conv in self.convs:
-            conv.reset_parameters()
-
-    def forward(self, x, adj_t):
-        for conv in self.convs[:-1]:
-            x = conv(x, adj_t)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.convs[-1](x, adj_t)
-        return x
-
-
-class SAGE(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers, dropout):
-        super(SAGE, self).__init__()
-
-        self.convs = torch.nn.ModuleList()
-        self.convs.append(SAGEConv(in_channels, hidden_channels))
-        for _ in range(num_layers - 2):
-            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
-        self.convs.append(SAGEConv(hidden_channels, out_channels))
-
-        self.dropout = dropout
-
-    def reset_parameters(self):
-        for conv in self.convs:
-            conv.reset_parameters()
-
-    def forward(self, x, adj_t):
-        for conv in self.convs[:-1]:
-            x = conv(x, adj_t)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.convs[-1](x, adj_t)
-        return x
-
-
 class LinkPredictor(torch.nn.Module):
     def __init__(self, in_channels, 
                  hidden_channels, 
@@ -448,5 +454,162 @@ class LinkPredictor(torch.nn.Module):
         x = self.lins[-1](x)
         return torch.sigmoid(x)
     
-    
-    
+
+class SparseLinear(MessagePassing):
+    def __init__(self, in_channels: int, out_channels: int, bias: bool = True):
+        super().__init__(aggr='add')
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.weight = Parameter(torch.empty(in_channels, out_channels))
+        if bias:
+            self.bias = Parameter(torch.empty(out_channels))
+        else:
+            self.register_parameter('bias', None)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        inits.kaiming_uniform(self.weight, fan=self.in_channels,
+                              a=math.sqrt(5))
+        inits.uniform(self.in_channels, self.bias)
+
+    def forward(
+        self,
+        edge_index: Adj,
+        edge_weight: OptTensor = None,
+    ) -> Tensor:
+        # propagate_type: (weight: Tensor, edge_weight: OptTensor)
+        out = self.propagate(edge_index, weight=self.weight,
+                             edge_weight=edge_weight)
+
+        if self.bias is not None:
+            out = out + self.bias
+
+        return out
+
+    def message(self, weight_j: Tensor, edge_weight: OptTensor) -> Tensor:
+        if edge_weight is None:
+            return weight_j
+        else:
+            return edge_weight.view(-1, 1) * weight_j
+
+    def message_and_aggregate(self, adj_t: Adj, weight: Tensor) -> Tensor:
+        return spmm(adj_t, weight, reduce=self.aggr)
+
+
+class LINKX(torch.nn.Module):
+    r"""The LINKX model from the `"Large Scale Learning on Non-Homophilous
+    Graphs: New Benchmarks and Strong Simple Methods"
+    <https://arxiv.org/abs/2110.14446>`_ paper.
+
+    .. math::
+        \mathbf{H}_{\mathbf{A}} &= \textrm{MLP}_{\mathbf{A}}(\mathbf{A})
+
+        \mathbf{H}_{\mathbf{X}} &= \textrm{MLP}_{\mathbf{X}}(\mathbf{X})
+
+        \mathbf{Y} &= \textrm{MLP}_{f} \left( \sigma \left( \mathbf{W}
+        [\mathbf{H}_{\mathbf{A}}, \mathbf{H}_{\mathbf{X}}] +
+        \mathbf{H}_{\mathbf{A}} + \mathbf{H}_{\mathbf{X}} \right) \right)
+
+    .. note::
+
+        For an example of using LINKX, see `examples/linkx.py <https://
+        github.com/pyg-team/pytorch_geometric/blob/master/examples/linkx.py>`_.
+
+    Args:
+        num_nodes (int): The number of nodes in the graph.
+        in_channels (int): Size of each input sample, or :obj:`-1` to derive
+            the size from the first input(s) to the forward method.
+        hidden_channels (int): Size of each hidden sample.
+        out_channels (int): Size of each output sample.
+        num_layers (int): Number of layers of :math:`\textrm{MLP}_{f}`.
+        num_edge_layers (int, optional): Number of layers of
+            :math:`\textrm{MLP}_{\mathbf{A}}`. (default: :obj:`1`)
+        num_node_layers (int, optional): Number of layers of
+            :math:`\textrm{MLP}_{\mathbf{X}}`. (default: :obj:`1`)
+        dropout (float, optional): Dropout probability of each hidden
+            embedding. (default: :obj:`0.0`)
+    """
+    def __init__(
+        self,
+        num_nodes: int,
+        in_channels: int,
+        hidden_channels: int,
+        out_channels: int,
+        num_layers: int,
+        num_edge_layers: int = 1,
+        num_node_layers: int = 1,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+
+        self.num_nodes = num_nodes
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.num_edge_layers = num_edge_layers
+
+        self.edge_lin = SparseLinear(num_nodes, hidden_channels)
+
+        if self.num_edge_layers > 1:
+            self.edge_norm = BatchNorm1d(hidden_channels)
+            channels = [hidden_channels] * num_edge_layers
+            self.edge_mlp = MLP(channels, dropout=0., act_first=True)
+        else:
+            self.edge_norm = None
+            self.edge_mlp = None
+
+        channels = [in_channels] + [hidden_channels] * num_node_layers
+        self.node_mlp = MLP(channels, dropout=0., act_first=True)
+
+        self.cat_lin1 = torch.nn.Linear(hidden_channels, hidden_channels)
+        self.cat_lin2 = torch.nn.Linear(hidden_channels, hidden_channels)
+
+        channels = [hidden_channels] * num_layers + [out_channels]
+        self.final_mlp = MLP(channels, dropout=dropout, act_first=True)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        r"""Resets all learnable parameters of the module."""
+        self.edge_lin.reset_parameters()
+        if self.edge_norm is not None:
+            self.edge_norm.reset_parameters()
+        if self.edge_mlp is not None:
+            self.edge_mlp.reset_parameters()
+        self.node_mlp.reset_parameters()
+        self.cat_lin1.reset_parameters()
+        self.cat_lin2.reset_parameters()
+        self.final_mlp.reset_parameters()
+
+    def forward(
+        self,
+        x: OptTensor,
+        edge_index: Adj,
+        edge_weight: OptTensor = None,
+    ) -> Tensor:
+        """"""  # noqa: D419
+        out = self.edge_lin(edge_index, edge_weight)
+
+        if self.edge_norm is not None and self.edge_mlp is not None:
+            out = out.relu_()
+            out = self.edge_norm(out)
+            out = self.edge_mlp(out)
+
+        out = out + self.cat_lin1(out)
+
+        if x is not None:
+            x = self.node_mlp(x)
+            out = out + x
+            out = out + self.cat_lin2(x)
+
+        return self.final_mlp(out.relu_())
+
+    def __repr__(self) -> str:
+        return (f'{self.__class__.__name__}(num_nodes={self.num_nodes}, '
+                f'in_channels={self.in_channels}, '
+                f'out_channels={self.out_channels})')
+        
+        
+
+
