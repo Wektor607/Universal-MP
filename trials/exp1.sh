@@ -5,7 +5,6 @@
 #SBATCH --output=/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/
 #SBATCH --error=/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/error
 #SBATCH --job-name=exp1
-#SBATCH --mem-per-cpu=
 
 
 # execute your commands
@@ -20,11 +19,16 @@ for model in "${models[@]}"; do
     python gcn2struc.py --model "$model" &
 done
 
-# Optional: Wait for all background processes to complete before exiting the script
 wait
 
-python gcn2struc.py --model Custom_GAT
-python gcn2struc.py --model Custom_GCN
-python gcn2struc.py --model GraphSAGE
-python gcn2struc.py --model Custom_GIN
-python gcn2struc.py --model LINKX
+
+models=("Custom_GAT" "Custom_GCN" "GraphSAGE" "Custom_GIN" "LINKX")
+
+for model in "${models[@]}"; do
+
+    python gcn2struc.py --model "$model" --h_key PPR
+done
+
+wait
+
+

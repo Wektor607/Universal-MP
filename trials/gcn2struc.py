@@ -32,7 +32,7 @@ from utils import set_random_seeds
 import argparse
 import wandb
 ROOT = os.path.dirname(os.path.abspath(__file__))
-
+NUM_SEED = 8
 
 
 
@@ -222,7 +222,6 @@ def experiment_loop(args: argparse.Namespace):
         splits[key]['pos_edge_score'] = pos_edge_score / max_score
         splits[key]['neg_edge_score'] = neg_edge_score / max_score
 
-
     # refine it as class and save into .npz
     # Store results of each experiment
     early_stopping = EarlyStopping(patience=5, verbose=True)
@@ -361,10 +360,10 @@ if __name__ == "__main__":
     args = parse_args()
     print(args)
 
-    for node_feature in ['adjacency', 'original', 'one-hot', 'random']:
-        args.node_feature = node_feature
-        for i in range(1):
-            set_random_seeds(i)
+    for i in range(NUM_SEED):
+        set_random_seeds(i)
+        for node_feature in ['adjacency', 'original', 'one-hot', 'random']:
+            args.node_feature = node_feature
 
             wandb.init(project="graph-link-prediction", config={
                 "epochs": args.epochs,
@@ -376,7 +375,5 @@ if __name__ == "__main__":
                 "weight_decay": 0
             })
             config = wandb.config
-
-
             experiment_loop(args)
                 
