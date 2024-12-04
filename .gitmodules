@@ -1,0 +1,3 @@
+[submodule "efficient-node-labelling"]
+	path = efficient-node-labelling
+	url = https://github.com/username/efficient-node-labelling.git
