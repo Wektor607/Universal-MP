@@ -173,7 +173,7 @@ class GraphSAGE(torch.nn.Module):
         return x
 
 
-class GIN_Variant(torch.nn.Module):
+class Custom_GIN(torch.nn.Module):
     def __init__(self,
                  in_channels,
                  hidden_channels,
