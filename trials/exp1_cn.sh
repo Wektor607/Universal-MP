@@ -21,14 +21,4 @@ done
 
 wait
 
-
-models=("Custom_GAT" "Custom_GCN" "GraphSAGE" "Custom_GIN" "LINKX")
-
-for model in "${models[@]}"; do
-
-    python gcn2struc.py --model "$model" --h_key PPR
-done
-
-wait
-
-
+python gcn2struc.py --model "$model" &
