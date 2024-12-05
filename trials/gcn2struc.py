@@ -31,10 +31,10 @@ from tqdm import tqdm
 from utils import set_random_seeds
 import argparse
 import wandb
+from typing import Dict, Any
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 NUM_SEED = 8
-
-
 
 
 def spmdiff_efficient(adj1: SparseTensor, adj2: SparseTensor, keep_val: bool = False) -> SparseTensor:
@@ -153,35 +153,10 @@ def train_cn(encoder, predictor, optimizer, data, split_edge, batch_size, mask_t
     return loss.item()
 
 
-def experiment_loop(args: argparse.Namespace):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Load dataset and set up data
-    data, splits = loaddataset(args.dataset, None)
-    data = data.to(device)
-
-    edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
-    A = ssp.csr_matrix(
-        (edge_weight, (data.edge_index[0].cpu(), data.edge_index[1].cpu())),
-        shape=(data.num_nodes, data.num_nodes)
-    )
-
-    # Config node feature
-    if args.node_feature == 'one-hot':
-        data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
-    elif args.node_feature == 'random':
-        dim_feat = data.x.size(1)
-        data.x = torch.randn(data.num_nodes, dim_feat).to(device)
-    elif args.node_feature == 'adjacency':
-        A_dense = A.toarray()
-        A_tensor = torch.tensor(A_dense)
-        data.x = A_tensor.float().to(device)
-    elif args.node_feature == 'original':
-        pass
-    else:
-        raise NotImplementedError(
-            f'node_feature: {args.node_feature} is not implemented.'
-        )
+def experiment_loop(args: argparse.Namespace, 
+                    splits: Dict[str, Dict[str, Any]],
+                    data: DataLoader):
 
     # Initialize model configuration
     with open(ROOT + '/exp1_gnn.yaml', "r") as f:
@@ -199,31 +174,7 @@ def experiment_loop(args: argparse.Namespace):
     else:
         cfg_encoder.in_channels = data.x.size(1)
 
-    heuristic = {
-        "CN": CommonNeighbor,
-        "AA": AA,
-        "RA": RA,
-        "PPR": Ben_PPR,
-        "katz": katz_apro,
-        "shortest_path": shortest_path
-    }
-
-    # Heuristic scores
-    for key in splits:
-        pos_edge_score, _ = heuristic[args.h_key](
-            A, splits[key]['pos_edge_label_index'], batch_size=args.batch_size
-        )
-        neg_edge_score, _ = heuristic[args.h_key](
-            A, splits[key]['neg_edge_label_index'], batch_size=args.batch_size
-        )
         
-        # Normalize the scores
-        max_score = pos_edge_score.max()
-        splits[key]['pos_edge_score'] = pos_edge_score / max_score
-        splits[key]['neg_edge_score'] = neg_edge_score / max_score
-
-    # refine it as class and save into .npz
-    # Store results of each experiment
     early_stopping = EarlyStopping(patience=5, verbose=True)
 
     cfg_encoder.in_channels = data.x.size(-1)
@@ -330,12 +281,11 @@ def experiment_loop(args: argparse.Namespace):
 def parse_args():
     parser = argparse.ArgumentParser(description="Configuration for training.")
 
-    # Training parameters
+    # Training parameters 
     parser.add_argument('--epochs', type=int, default=1, help="Number of training epochs.")
     parser.add_argument('--dataset', type=str, default="ddi", help="Dataset to use.")
     parser.add_argument('--batch_size', type=int, default=2**10, help="Batch size for training.")
     parser.add_argument('--h_key', type=str, default="CN", help="Heuristic key to use.")
-    parser.add_argument('--gnn', type=str, default="gcn", help="GNN type to use.")
     parser.add_argument('--model', type=str, default="Custom_GAT", 
                         choices = ["LINKX", "Custom_GAT", "Custom_GCN", "GraphSAGE", "Custom_GIN"], 
                         help="Model type to use.")
@@ -352,7 +302,6 @@ def parse_args():
     parser.add_argument('--weight_decay', type=float, default=0.0005, help="Weight decay for optimizer.")
 
     return parser.parse_args()
-
 
 
 if __name__ == "__main__":
@@ -374,6 +323,61 @@ if __name__ == "__main__":
                 "lr": args.lr,
                 "weight_decay": 0
             })
+            
             config = wandb.config
-            experiment_loop(args)
+            
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            data, splits = loaddataset(args.dataset, None)
+            data = data.to(device)
+
+            edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
+            A = ssp.csr_matrix(
+                (edge_weight, (data.edge_index[0].cpu(), data.edge_index[1].cpu())),
+                shape=(data.num_nodes, data.num_nodes)
+            )
+
+            if args.node_feature == 'one-hot':
+                data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
+            elif args.node_feature == 'random':
+                dim_feat = data.x.size(1)
+                data.x = torch.randn(data.num_nodes, dim_feat).to(device)
+            elif args.node_feature == 'adjacency':
+                A_dense = A.toarray()
+                A_tensor = torch.tensor(A_dense)
+                data.x = A_tensor.float().to(device)
+            elif args.node_feature == 'original':
+                pass
+            else:
+                raise NotImplementedError(
+                    f'node_feature: {args.node_feature} is not implemented.'
+                )
+                
+            heuristic = {
+                "CN": CommonNeighbor,
+                "AA": AA,
+                "RA": RA,
+                "PPR": Ben_PPR,
+                "katz": katz_apro,
+                "shortest_path": shortest_path
+            }
+
+            # Heuristic scores
+            for key in splits:
+                pos_edge_score, _ = heuristic[args.h_key](
+                    A, splits[key]['pos_edge_label_index'], batch_size=args.batch_size
+                )
+                neg_edge_score, _ = heuristic[args.h_key](
+                    A, splits[key]['neg_edge_label_index'], batch_size=args.batch_size
+                )
+                
+                # Normalize the scores
+                max_score = pos_edge_score.max()
+                splits[key]['pos_edge_score'] = pos_edge_score / max_score
+                splits[key]['neg_edge_score'] = neg_edge_score / max_score
+
+            import pickle
+            with open(f"{args.dataset}_{args.h_key}_data.pkl", "wb") as f:
+                pickle.dump(splits, f)
+                
+            experiment_loop(args, splits, data)
                 

@@ -1,0 +1,3 @@
+Model,NodeFeat,Heuristic,Test_Loss
+Custom_GAT,adjacency,PPR,4.34998182754498e-05
+Custom_GAT,adjacency,PPR,4.34998182754498e-05

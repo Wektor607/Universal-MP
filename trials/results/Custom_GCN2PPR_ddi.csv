@@ -1,0 +1,2 @@
+Model,NodeFeat,Heuristic,Test_Loss
+Custom_GCN,adjacency,PPR,0.000118434545584023
