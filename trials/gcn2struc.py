@@ -311,7 +311,7 @@ if __name__ == "__main__":
 
     for i in range(NUM_SEED):
         set_random_seeds(i)
-        for node_feature in ['adjacency', 'original', 'one-hot', 'random']:
+        for node_feature in ['original', 'one-hot', 'random', 'adjacency']:
             args.node_feature = node_feature
 
             wandb.init(project="graph-link-prediction", config={
@@ -321,7 +321,6 @@ if __name__ == "__main__":
 
                 "h_key": args.h_key,
                 "model": args.model,
-
                 "lr": args.lr,
                 "weight_decay": 0
             })
