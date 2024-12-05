@@ -74,6 +74,13 @@ def RA(A, edge_index, batch_size=100000, beta=0.5, A2=None, gamma=0.1):
     return torch.FloatTensor(scores), edge_index
 
 
+def sort_edge_index(edge_index):
+    """Sort the edge index in ascending order according to the source node index."""
+
+    src_index, sort_indices = torch.sort(edge_index[:, 0])
+    dst_index = edge_index[sort_indices, 1]
+    edge_reindex = torch.stack([src_index, dst_index])
+    return edge_reindex, sort_indices
 
 
 def Ben_PPR(A, edge_index, batch_size=10000):

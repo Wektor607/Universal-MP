@@ -1,0 +1,2 @@
+Model,NodeFeat,Heuristic,Test_Loss
+GraphSAGE,adjacency,PPR,3.4317621611990035e-05
