@@ -367,7 +367,7 @@ if __name__ == "__main__":
                 "dataset": args.dataset,
                 "batch_size": args.batch_size,
                 "h_key": "CN",
-                "model": "LINKX",
+                "model": args.model,
                 "use_feature": False,
                 "lr": args.lr,
                 "weight_decay": 0
