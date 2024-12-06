@@ -5,3 +5,4 @@ dataset/
 **/log
 trials/log/
 trials/error/
+*.png
