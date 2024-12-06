@@ -203,7 +203,7 @@ class SyntheticGraphGeneration:
         plt.title('Distribution of Common Neighbors')
         plt.savefig(f'{SyntheticGraphGeneration.FILE_PATH}/common_neighbours_distribution.png')
 
-    def generate_node_features(self, G: nx.Graph) -> torch.Tensor:
+    def generate_nodefeats(self, G: nx.Graph) -> torch.Tensor:
         """
         Input:
         ----------
@@ -222,14 +222,14 @@ class SyntheticGraphGeneration:
         """
         num_nodes: int = len(G.nodes)
         if self.feature_type == 'random':
-            node_features: torch.Tensor = torch.randn(num_nodes, self.emb_dim)
+            nodefeats: torch.Tensor = torch.randn(num_nodes, self.emb_dim)
         elif self.feature_type == 'one-hot':
-            node_features: torch.Tensor = torch.eye(num_nodes)
+            nodefeats: torch.Tensor = torch.eye(num_nodes)
         elif self.feature_type == 'degree':
             degree: List[int] = [val for (_, val) in G.degree()]
-            node_features: torch.Tensor = torch.tensor(degree, dtype=torch.float32).view(-1, 1)
+            nodefeats: torch.Tensor = torch.tensor(degree, dtype=torch.float32).view(-1, 1)
             
-        return node_features
+        return nodefeats
 
     def rename_fields(self, data: Data) -> Data:
         """
@@ -495,7 +495,7 @@ class SyntheticGraphGeneration:
         weights: torch.Tensor = data.edge_weight.clone()
         
         # Creating node features
-        data.x = self.generate_node_features(G)
+        data.x = self.generate_nodefeats(G)
         
         # Creating sparse adjacency matrix
         data = T.ToSparseTensor()(data)

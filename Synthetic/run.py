@@ -36,7 +36,7 @@ if __name__ == "__main__":
         feature_type=args.feature_type,
         cfg=args
     )
-    data, adj_matrix, node_features, splits = gen_graph.generate_graph()
+    data, adj_matrix, nodefeats, splits = gen_graph.generate_graph()
     # print(splits)
     # print(data, '\n')
     # print(data.pos, '\n')

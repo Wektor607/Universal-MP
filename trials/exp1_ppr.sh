@@ -13,31 +13,25 @@
 
 # Notification settings:
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=chen.shao2@kit.edu
-
-# Request GPU resources
-source /hkfs/home/project/hk-project-test-p0021478/cc7738/anaconda3/etc/profile.d/conda.sh
-
-conda activate ss
-
-# <<< conda initialize <<<
-module purge
-module load devel/cmake/3.18
-module load devel/cuda/11.8
-module load compiler/gnu/12
+#SBATCH --output=/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/
+#SBATCH --error=/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/error
+#SBATCH --job-name=exp1
 
 
-cd /hkfs/work/workspace/scratch/cc7738-rebuttal/Universal-MP/trials
+# execute your commands
+cd /pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/
 
-
+# Array of model names
 models=("Custom_GAT" "Custom_GCN" "GraphSAGE" "Custom_GIN" "LINKX")
+nodefeat=("adjacency"  "one-hot"  "random"  "original")
+
 
 for model in "${models[@]}"; do
-    echo "python gcn2struc.py --model "$model" &"
-    python gcn2struc.py --model "$model" --h_key PPR & 
-done
+    for nodefeat in "${nodefeat[@]}"; do
+        echo "python gcn2struc.py --model "$model" --dataset "ddi" --nodefeat "$nodefeat" --h_key "PPR" "
+        python gcn2struc.py --model "$model" --dataset  "ddi"  --nodefeat "$nodefeat" --h_key "PPR"
+    done
+done 
 
-wait
 
-
-python gcn2struc.py --model "$model" --h_key PPR & 
+wait    
