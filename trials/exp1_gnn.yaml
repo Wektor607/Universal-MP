@@ -2,22 +2,11 @@
 
 out_dir: results
 metric_best: [Hits@10, MRR, AUC]
-cfg_dest: heart_gnn_unified.yaml
-print: file
-seed: 0
-accelerator: auto
-
-wandb:
-  use: True
-  project: gtblueprint
-  name_tag: Tune  # tune or train
+cfg_dest: heart_gnn_models.yaml
 
 run:
   seed: 0
-  num_threads: 11
-  multiple_splits: None
-
-
+  repeat: 3
 
 train:
   mode: custom
@@ -34,11 +23,10 @@ train:
   finetune : False
 
 model:
-  type: GCN_Variant
-  sampler: gsaint
+  type: LINKX
 
   batch_size_sampler: 1024
-  GCN_Variant: 
+  Custom_GCN: 
     in_channels: None
     hidden_channels: 32
     out_channels: 32
@@ -46,7 +34,7 @@ model:
     dropout: 0
     num_layers: 2
 
-  GAT_Variant:
+  Custom_GAT:
     heads: 4
     hidden_channels: 32
     negative_slope: 0.1
@@ -56,7 +44,7 @@ model:
     in_channels: None
     out_channels: 32
 
-  SAGE_Variant:
+  GraphSAGE:
     in_channels: None
     hidden_channels: 64
     out_channels: 128
@@ -64,7 +52,7 @@ model:
     dropout: 0
     emb: False
 
-  GIN_Variant:
+  Custom_GIN:
     out_channels: 64
     hidden_channels: 64
     dropout: 0
@@ -80,18 +68,10 @@ model:
     num_edge_layers: 1         
     num_node_layers: 1       
 
-sampler:
-  type: gsaint
-  gsaint:
-    num_steps: 30
-    sample_coverage: 100
-    walk_length: 20
-    batch_size: 2048
-
 score:
-  type: mlp_score
+  type: LinkPredictor
 
-  GAT_Variant:
+  Custom_GAT:
     score_in_channels: 32 #must be same as out_channels of GAT
     score_hidden_channels: 64
     score_num_layers_predictor: 3
@@ -103,7 +83,7 @@ score:
     score_num_layers: 2
     product: dot
 
-  GCN_Variant:
+  Custom_GCN:
     score_in_channels: 32
     score_hidden_channels: 64
     score_num_layers_predictor: 3
@@ -116,7 +96,7 @@ score:
     product: inner
 
 
-  GIN_Variant:
+  Custom_GIN:
     score_in_channels: 64
     score_hidden_channels: 64
     score_num_layers_predictor: 3
@@ -128,7 +108,7 @@ score:
     score_num_layers: 2
     product: dot
 
-  SAGE_Variant:
+  GraphSAGE:
     score_in_channels: 128
     score_hidden_channels: 64
     score_num_layers_predictor: 3
@@ -170,14 +150,3 @@ optimizer:
   base_lr: 0.015
   weight_decay: 0.0005
 
-
-sampler:
-  gsaint:
-    sampler_batch_size: 1024
-    walk_length: 10
-    num_steps: 10
-    sample_coverage: 100
-
-
-save:
-  output_dir: './'

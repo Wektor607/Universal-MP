@@ -133,6 +133,8 @@ def Ben_PPR(A, edge_index, batch_size=10000):
     
     return torch.FloatTensor(scores), edge_reindex
 
+
+
 def test_index_symmetric(edge_index):
     """symmetrize test edge split"""
     srt, dst = edge_index

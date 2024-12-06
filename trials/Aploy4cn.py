@@ -17,7 +17,7 @@ from sklearn.metrics import roc_auc_score
 from baselines.MLP import MLPPolynomialFeatures
 from baselines.utils import loaddataset
 from baselines.heuristic import CN, AA, RA, Ben_PPR, katz_apro
-from baselines.GNN import GAT_Variant, GCN_Variant, SAGE_Variant, GIN_Variant, GAE4LP, InnerProduct, mlp_score
+from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, Custom_GIN, GAE4LP,  LinkPredictor
 from archiv.mlp_heuristic_main import EarlyStopping
 from utils import EarlyStopping, visualize
 from baselines.heuristic import CN as CommonNeighbor
@@ -31,7 +31,7 @@ class Config:
         self.model = "MLP"
         self.early_stopping = True
         self.use_feature = True
-        self.node_feature = 'one-hot'
+        self.nodefeat = 'one-hot'
         self.heuristic = "PPR"
         self.K = 2
 
@@ -233,23 +233,23 @@ def experiment_loop_cn():
     )
 
     if args.use_nodefeat:
-        if args.node_feature == 'one-hot':
+        if args.nodefeat == 'one-hot':
             data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
-        elif args.node_feature == 'random':
+        elif args.nodefeat == 'random':
             dim_feat = data.x.size(1)
             data.x = torch.randn(data.num_nodes, dim_feat).to(device)
-        elif args.node_feature == 'quasi-orthogonal':
+        elif args.nodefeat == 'quasi-orthogonal':
             pass
-        elif args.node_feature == 'adjacency':
+        elif args.nodefeat == 'adjacency':
             A_dense = A.toarray()
             A_tensor = torch.tensor(A_dense)
             data.x = A_tensor.float().to(device)
-        elif args.node_feature == 'original':
+        elif args.nodefeat == 'original':
             pass
-        elif args.node_feature == 'none':
+        elif args.nodefeat == 'none':
             pass
         else:
-            raise NotImplementedError(f'{args.node_feature} is missing.')
+            raise NotImplementedError(f'{args.nodefeat} is missing.')
 
     method_dict = {
         "CN": CommonNeighbor,
@@ -298,7 +298,7 @@ def experiment_loop_cn():
     save_to_csv(f'./results/APoly4{args.heuristic}_{args.dataset}.csv',
                 args.K,  # K
                 args.use_nodefeat,
-                args.node_feature,
+                args.nodefeat,
                 test_mse)
     print(f'Saved to ./results/APoly4{args.heuristic}_{args.dataset}.csv')
 
@@ -307,10 +307,10 @@ if __name__ == "__main__":
     args = Config()
     for args.K in [2, 3]:
         args.use_nodefeat = True
-        for args.node_feature in ['one-hot', 'random', 'adjacency', 'original']:
+        for args.nodefeat in ['one-hot', 'random', 'adjacency', 'original']:
             for i in range(5):
                 experiment_loop_cn()
         args.use_feature = False
         for i in range(5):
-            args.node_feature = 'none'
+            args.nodefeat = 'none'
             experiment_loop_cn()

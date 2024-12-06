@@ -5,18 +5,18 @@ from generate_graph import SyntheticGraphGeneration
 @pytest.mark.parametrize("graph_type", [0, 1, 2])
 def test_generate_graph_basic(graph_type):
     gen = SyntheticGraphGeneration(m=5, n=5, emb_dim=8, graph_type=graph_type)
-    data, adj_t, node_features, _ = gen.generate_graph()
+    data, adj_t, nodefeats, _ = gen.generate_graph()
     assert data.num_nodes > 0
     assert data.num_edges > 0
-    assert node_features.shape[1] == 8
+    assert nodefeats.shape[1] == 8
     assert adj_t.nnz() > 0
 
 @pytest.mark.parametrize("m, n", [(3, 3), (5, 10), (10, 5)])
 def test_generate_graph_with_different_number_of_rows_and_columns(m, n):
     gen = SyntheticGraphGeneration(m=m, n=n, emb_dim=4, graph_type=0)
-    data, _, node_features, _ = gen.generate_graph()
+    data, _, nodefeats, _ = gen.generate_graph()
     assert data.num_nodes == m * n
-    assert node_features.shape[0] == m * n
+    assert nodefeats.shape[0] == m * n
 
 @pytest.mark.parametrize("graph_type, max_neighbors", [
     (0, 4),
@@ -74,10 +74,10 @@ def test_edge_weights():
     assert (weights >= 0.1).all() and (weights <= 1.0).all()
 
 @pytest.mark.parametrize("feature_type", ["random", "one-hot", "degree"])
-def test_node_feature_generation(feature_type):
+def test_nodefeat_generation(feature_type):
     gen = SyntheticGraphGeneration(m=5, n=5, emb_dim=4, graph_type=0, feature_type=feature_type)
     G, _ = gen.create_square_grid()
-    features = gen.generate_node_features(G)
+    features = gen.generate_nodefeats(G)
     if feature_type == "random":
         assert features.shape == (25, 4)
     elif feature_type == "one-hot":

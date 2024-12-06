@@ -6,6 +6,14 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.utils import to_undirected, coalesce, remove_self_loops
 import torch_geometric.transforms as T
 
+def sort_edge_index(edge_index):
+    """Sort the edge index in ascending order according to the source node index."""
+
+    src_index, sort_indices = torch.sort(edge_index[:, 0])
+    dst_index = edge_index[sort_indices, 1]
+    edge_reindex = torch.stack([src_index, dst_index])
+    return edge_reindex, sort_indices
+
 
 def randomsplit(data, val_ratio: float = 0.05, test_ratio: float = 0.15):
     data.edge_index, _ = coalesce(
