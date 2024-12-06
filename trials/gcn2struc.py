@@ -34,7 +34,8 @@ import wandb
 from typing import Dict, Any
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-NUM_SEED = 8
+print(f"ROOT: {ROOT}")
+NUM_SEED = 4
 
 
 def spmdiff_efficient(adj1: SparseTensor, adj2: SparseTensor, keep_val: bool = False) -> SparseTensor:
@@ -300,7 +301,8 @@ def parse_args():
     # Optimizer parameters
     parser.add_argument('--lr', type=float, default=0.001, help="Learning rate.")
     parser.add_argument('--weight_decay', type=float, default=0.0005, help="Weight decay for optimizer.")
-
+    parser.add_argument('--generate_dataset', action='store_true', help="Generate dataset.")
+    
     return parser.parse_args()
 
 
@@ -329,9 +331,10 @@ if __name__ == "__main__":
             
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             data, splits = loaddataset(args.dataset, None)
-            data = data.to(device)
+            data = data.to(device) 
 
             edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
+            
             A = ssp.csr_matrix(
                 (edge_weight, (data.edge_index[0].cpu(), data.edge_index[1].cpu())),
                 shape=(data.num_nodes, data.num_nodes)
@@ -363,22 +366,34 @@ if __name__ == "__main__":
             }
 
             # Heuristic scores
-            for key in splits:
-                pos_edge_score, _ = heuristic[args.h_key](
-                    A, splits[key]['pos_edge_label_index'], batch_size=args.batch_size
-                )
-                neg_edge_score, _ = heuristic[args.h_key](
-                    A, splits[key]['neg_edge_label_index'], batch_size=args.batch_size
-                )
-                
-                # Normalize the scores
-                max_score = pos_edge_score.max()
-                splits[key]['pos_edge_score'] = pos_edge_score / max_score
-                splits[key]['neg_edge_score'] = neg_edge_score / max_score
+            
+            if args.generate_dataset:
+                for key in splits:
+                    pos_edge_score, _ = heuristic[args.h_key](
+                        A, splits[key]['pos_edge_label_index'], batch_size=args.batch_size
+                    )
+                    neg_edge_score, _ = heuristic[args.h_key](
+                        A, splits[key]['neg_edge_label_index'], batch_size=args.batch_size
+                    )
+                    
+                    # Normalize the scores
+                    max_score = pos_edge_score.max()
+                    splits[key]['pos_edge_score'] = pos_edge_score / max_score
+                    splits[key]['neg_edge_score'] = neg_edge_score / max_score
 
+                import pickle
+                with open(f"{args.dataset}_{args.h_key}_data.pkl", "wb") as f:
+                    pickle.dump(splits, f)
+            
             import pickle
-            with open(f"{args.dataset}_{args.h_key}_data.pkl", "wb") as f:
-                pickle.dump(splits, f)
-                
+
+            # Replace 'args.dataset' and 'args.h_key' with your specific file naming variables or values.
+            file_path = f"/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/{args.dataset}_{args.h_key}_data.pkl"
+
+            # Open the file in 'read binary' mode and load the data
+            with open(file_path, "rb") as f:
+                splits = pickle.load(f)
+            print(f'dataset is loaded: {splits.keys()}')
             experiment_loop(args, splits, data)
                 
+            #TODO training is instable for LINKX and Custom_GCN try lr log3

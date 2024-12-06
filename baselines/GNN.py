@@ -32,34 +32,16 @@ class Custom_GCN(torch.nn.Module):
 
         self.convs = torch.nn.ModuleList()
 
-        if data_name == 'ogbl-citation2':
-            if num_layers == 1:
+        if num_layers == 1:
+            self.convs.append(GCNConv(in_channels, out_channels))
+
+        elif num_layers > 1:
+            self.convs.append(GCNConv(in_channels, hidden_channels))
+
+            for _ in range(num_layers - 2):
                 self.convs.append(
-                    GCNConv(in_channels, out_channels, normalize=False)
-                )
-            elif num_layers > 1:
-                self.convs.append(
-                    GCNConv(in_channels, hidden_channels, normalize=False))
-
-                for _ in range(num_layers - 2):
-                    self.convs.append(
-                        GCNConv(hidden_channels, hidden_channels, 
-                                normalize=False))
-                self.convs.append(
-                    GCNConv(hidden_channels, out_channels, normalize=False)
-                )
-
-        else:
-            if num_layers == 1:
-                self.convs.append(GCNConv(in_channels, out_channels))
-
-            elif num_layers > 1:
-                self.convs.append(GCNConv(in_channels, hidden_channels))
-
-                for _ in range(num_layers - 2):
-                    self.convs.append(
-                        GCNConv(hidden_channels, hidden_channels))
-                self.convs.append(GCNConv(hidden_channels, out_channels))
+                    GCNConv(hidden_channels, hidden_channels))
+            self.convs.append(GCNConv(hidden_channels, out_channels))
 
         self.dropout = dropout
         # self.p = args
