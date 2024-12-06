@@ -1,6 +1,17 @@
 #!/bin/bash
+
 #SBATCH --time=4:00:00
-#SBATCH --partition=single
+#SBATCH --partition=accelerated
+#SBATCH --job-name=gcn4cn
+#SBATCH --gres=gpu:1
+
+#SBATCH --output=log/UniversalMPNN_%j.output
+#SBATCH --error=error/UniversalMPNN_%j.error
+#SBATCH --account=hk-project-pai00001  # specify the project group
+
+#SBATCH --chdir=/hkfs/work/workspace/scratch/cc7738-rebuttal/Universal-MP/trials
+
+# Notification settings:
 #SBATCH --mail-type=ALL
 #SBATCH --output=/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/
 #SBATCH --error=/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/error

@@ -1,4 +1,8 @@
 dataset/
 
 **/__pycache__/
-
+**/error
+**/log
+trials/log/
+trials/error/
+*.png

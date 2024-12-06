@@ -14,8 +14,6 @@ sys.path.insert(
 )
 from baselines.heuristic import AA, RA, Ben_PPR, katz_apro, shortest_path
 from baselines.heuristic import CN as CommonNeighbor
-
-
 from baselines.GNN import LinkPredictor
 from yacs.config import CfgNode as CN
 from baselines.LINKX import LINKX
@@ -121,6 +119,7 @@ def spmdiff_efficient(adj1: SparseTensor, adj2: SparseTensor, keep_val: bool = F
             None,
             adj1.sizes()
         )
+
 
 @torch.no_grad()
 def valid_cn(encoder, predictor, data, splits, batch_size, device):
@@ -380,7 +379,6 @@ if __name__ == "__main__":
             splits[key]['pos_edge_score'] = pos_edge_score / max_score
             splits[key]['neg_edge_score'] = neg_edge_score / max_score
 
-        import pickle
         with open(f"{args.dataset}_{args.h_key}_data.pkl", "wb") as f:
             pickle.dump(splits, f)
     else:

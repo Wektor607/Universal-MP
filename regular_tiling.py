@@ -5,41 +5,9 @@ import torch
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import cm
-from torch_geometric.data import Data
 from torch_geometric.utils import from_networkx
 
-def plot_graph(G, pos=None, title="Graph", node_size=300, node_color='skyblue', with_labels=True):
-    plt.figure(figsize=(10, 8))
-    nx.draw(G, pos, with_labels=with_labels, node_size=node_size, node_color=node_color, edge_color='gray', font_size=10)
-    plt.title(title)
-    return plt
 
-def plot_heterophily_graph(G, pos=None, title="Graph", node_size=300, with_labels=True):
-    # Extract node labels
-    node_labels = nx.get_node_attributes(G, 'label')
-    
-    # Determine unique labels and assign colors
-    unique_labels = set(node_labels.values())
-    print(node_labels)
-    colors = ['red', 'black']  # Add more colors if you have more labels
-    
-    # Map node labels to colors
-    color_map = {label: colors[i % len(colors)] for i, label in enumerate(unique_labels)}
-    
-    # Get node colors based on labels
-    node_color = [color_map[node_labels[node]] for node in G.nodes]
-    print(node_color)
-    plt.figure(figsize=(10, 8))
-    nx.draw(G, pos, with_labels=with_labels, node_size=node_size, node_color=node_color, edge_color='gray', font_size=10)
-    plt.title(title)
-    return plt
-
-def create_grid_graph(m, n):
-    """ Create a grid graph and return its NetworkX graph and positions. """
-    G = nx.grid_2d_graph(m, n)
-    pos = {(x, y): (x, y) for x, y in G.nodes()}
-    return G, pos
 
 def create_kagome_lattice(m, n):
     """ Create a Kagome lattice and return its NetworkX graph and positions. """
@@ -89,6 +57,14 @@ def create_kagome_lattice(m, n):
     
     return G, pos
 
+
+def create_grid_graph(m, n):
+    """ Create a grid graph and return its NetworkX graph and positions. """
+    G = nx.grid_2d_graph(m, n)
+    pos = {(x, y): (x, y) for x, y in G.nodes()}
+    return G, pos
+
+
 def create_square_grid(m, n):
     num_nodes = m * n
     adj_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
@@ -120,16 +96,19 @@ def create_square_grid(m, n):
     
     return G, pos
 
+
 def create_triangle_grid(m, n):
     G = nx.triangular_lattice_graph(m, n)
     pos =  nx.get_node_attributes(G, 'pos')
     return G, pos
+
 
 def create_hexagonal_grid(m, n):
     # Generate the hexagonal lattice graph
     G = nx.hexagonal_lattice_graph(m, n)
     pos = nx.get_node_attributes(G, 'pos')
     return G, pos
+
 
 def plot_degree_histogram(G):
     """
@@ -166,6 +145,13 @@ def plot_degree_histogram(G):
     return plt
 
 
+def plot_graph(G, pos=None, title="Graph", node_size=300, node_color='skyblue', with_labels=True):
+    plt.figure(figsize=(10, 8))
+    nx.draw(G, pos, with_labels=with_labels, node_size=node_size, node_color=node_color, edge_color='gray', font_size=10)
+    plt.title(title)
+    return plt
+
+
 def gen_pyg_from_nx(m, n, emb_dim=32, graph_type='grid'):
     """
     Generates a PyG graph for nodes in a NetworkX graph based on their positions.
@@ -191,7 +177,6 @@ def gen_pyg_from_nx(m, n, emb_dim=32, graph_type='grid'):
         raise ValueError(f"Invalid graph type: {graph_type}")
     
     data = from_networkx(G)
-    print(data)
     
     emb_layer = torch.nn.Embedding(data.num_nodes, emb_dim)
     
@@ -211,21 +196,23 @@ def gen_pyg_from_nx(m, n, emb_dim=32, graph_type='grid'):
 
 # main function
 if __name__ == "__main__":
-    
-
     # Create a grid graph
     m, n = 5, 5
+    dim_feat = 32
     graph_type = 'kagome'
     for graph_type in ['grid', 'triangle', 'hexagonal', 'kagome']:
-        data, G, pos = gen_pyg_from_nx(m, n, 32, graph_type)
+        data, G, pos = gen_pyg_from_nx(m, n, dim_feat, graph_type)
         
-    plt = plot_graph(G, pos, title="Grid Graph")
-    plt.savefig('grid_graph.png')
-    plt.close()
-    plt = plot_degree_histogram(G)
-    plt.savefig('grid_graph_degree_hist.png')
-    plt.close()
-    
+        # plt = plot_graph(G, pos, title="Grid Graph")
+        # plt.savefig('grid_graph.png')
+        # plt.close()
+        
+        # plt = plot_degree_histogram(G)
+        # plt.savefig('grid_graph_degree_hist.png')
+        # plt.close()
+        
+        print(data.x)
+        print(data.edge_index)
 
-    print(data.x)
-    print(data.edge_index)
+
+        

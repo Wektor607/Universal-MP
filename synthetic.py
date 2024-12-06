@@ -1,29 +1,27 @@
-import os, sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import torch
 from typing import *
+import os
 import random
-import numpy as np
 import networkx as nx
 import argparse
 import seaborn as sns
-
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import cm
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 import scipy.sparse as sp
-
-from torch_sparse import SparseTensor
+import numpy as np
+import torch
+from matplotlib.pyplot import cm
 import torch_geometric.transforms as T
 from torch_geometric.data import Data
 from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.utils import from_networkx, to_undirected
 
+
 class SyntheticGraphGeneration:
     SQUARE = 0
     TRIANGLE = 1
     HEXAGONAL = 2
-    FILE_PATH = '/home/kit/aifb/cc7738/scratch/Universal-MP/Synthetic/pictures'
+    FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__)))
+    print(FILE_PATH)
     
     def __init__(self, m: int, n: int, emb_dim: int, graph_type: int, heterophily: bool=False, 
                  homophily: bool=False, feature_type: str='random', cfg: argparse.Namespace=None):
@@ -35,6 +33,7 @@ class SyntheticGraphGeneration:
         self.homophily    = homophily
         self.feature_type = feature_type
         self.cfg          = cfg
+
 
     def plot_graph(self, G: nx.Graph, pos: Optional[Dict[int, Tuple[float, float]]] = None,
                    title: str = "Graph", node_size: int = 300, node_color: str = 'skyblue', 
@@ -70,6 +69,7 @@ class SyntheticGraphGeneration:
                 edge_color='gray', font_size=10)
         plt.title(title)
         return plt.gcf()
+
 
     def plot_color_graph(self, G: nx.Graph, pos: Optional[Dict[int, Tuple[float, float]]] = None, 
                          title: str = "Graph", node_size: int = 300, with_labels: bool = True) -> Figure:
@@ -112,6 +112,7 @@ class SyntheticGraphGeneration:
         plt.title(title)
         return plt.gcf()
 
+
     def plot_degree_histogram(self, G: nx.Graph) -> Figure:
         """
         Input:
@@ -151,6 +152,7 @@ class SyntheticGraphGeneration:
         
         return fig
 
+
     def calculate_common_neighbors(self, edge_index: torch.Tensor, A: 'scipy.sparse.csr_matrix', batch_size: int = 10000) -> torch.FloatTensor:
         """
         Input:
@@ -174,6 +176,7 @@ class SyntheticGraphGeneration:
 
         scores = np.concatenate(scores, axis=0)
         return torch.FloatTensor(scores)
+
 
     def plot_common_neighbors_distribution(self, train_cn: torch.FloatTensor, test_cn: torch.FloatTensor) -> None:
         """
@@ -203,6 +206,7 @@ class SyntheticGraphGeneration:
         plt.title('Distribution of Common Neighbors')
         plt.savefig(f'{SyntheticGraphGeneration.FILE_PATH}/common_neighbours_distribution.png')
 
+
     def generate_nodefeats(self, G: nx.Graph) -> torch.Tensor:
         """
         Input:
@@ -231,6 +235,7 @@ class SyntheticGraphGeneration:
             
         return nodefeats
 
+
     def rename_fields(self, data: Data) -> Data:
         """
         Input:
@@ -256,6 +261,7 @@ class SyntheticGraphGeneration:
         del data.weight
         
         return data
+
 
     def create_square_grid(self) -> Tuple[nx.Graph, Dict[int, Tuple[float, float]]]:
         """
@@ -319,6 +325,7 @@ class SyntheticGraphGeneration:
                         G.nodes[current_id]['label'] = 0
         return G, pos
 
+
     def create_triangle_grid(self) -> Tuple[nx.Graph, Dict[Tuple[int, int], Tuple[float, float]]]:
         """
         Output:
@@ -356,6 +363,7 @@ class SyntheticGraphGeneration:
                     G.nodes[node]['label'] = 1
                 
         return G, pos
+
 
     def create_hexagonal_grid(self) -> Tuple[nx.Graph, Dict[Tuple[int, int], Tuple[float, float]]]:
         """
@@ -402,6 +410,7 @@ class SyntheticGraphGeneration:
                     y += 1
 
         return G, pos
+
 
     def get_edge_split(self, data: Data,
                    undirected: bool,
@@ -456,6 +465,7 @@ class SyntheticGraphGeneration:
         del train_data.neg_edge_label, train_data.neg_edge_label_index
         return {'train': train_data, 'valid': val_data, 'test': test_data}
 
+
     def generate_graph(self) -> Tuple[Data, torch.Tensor, torch.Tensor, Dict[int, Tuple[float, float]]]:
         """
         Output:
@@ -481,6 +491,7 @@ class SyntheticGraphGeneration:
         plt = self.plot_graph(G, pos, title=f"{self.graph_type} Graph")
         plt.savefig(f'{SyntheticGraphGeneration.FILE_PATH}/{self.graph_type}_grid_graph.png')
         
+        # TODO - add node feature initialization method 
         if self.homophily or self.heterophily:
             plt = self.plot_color_graph(G, pos, title=f"{self.graph_type} Graph")
             plt.savefig(f'{SyntheticGraphGeneration.FILE_PATH}/{self.graph_type}_grid_graph_color.png')
@@ -538,3 +549,64 @@ class SyntheticGraphGeneration:
         self.plot_common_neighbors_distribution(train_cn, test_cn)
         print(data.num_nodes)
         return data, data.adj_t, data.x, splits
+
+
+
+def plot_heterophily_graph(G, pos=None, title="Graph", node_size=300, with_labels=True):
+    # Extract node labels
+    node_labels = nx.get_node_attributes(G, 'label')
+    
+    # Determine unique labels and assign colors
+    unique_labels = set(node_labels.values())
+    print(node_labels)
+    colors = ['red', 'black']  # Add more colors if you have more labels
+    
+    # Map node labels to colors
+    color_map = {label: colors[i % len(colors)] for i, label in enumerate(unique_labels)}
+    
+    # Get node colors based on labels
+    node_color = [color_map[node_labels[node]] for node in G.nodes]
+    print(node_color)
+    plt.figure(figsize=(10, 8))
+    nx.draw(G, pos, with_labels=with_labels, node_size=node_size, node_color=node_color, edge_color='gray', font_size=10)
+    plt.title(title)
+    return plt
+
+class arg_params:
+    def __init__(self):
+        self.m = 4  # Number of rows in the grid
+        self.n = 4  # Number of columns in the grid
+        self.emb_dim = 32  # Embedding dimension
+        self.graph_type = 2  # Type of graph structure: 0 = Square, 1 = Triangle, 2 = Hexagonal
+        self.heterophily = False  # Enable heterophily for the graph
+        self.homophily = False  # Enable homophily for the graph
+        self.feature_type = 'random'  # Embedding generation type: 'random', 'one-hot', or 'degree'
+        self.undirected = True  # Specify if the graph is undirected
+        self.device = 'cpu'  # Device to run computations (e.g., 'cpu' or 'cuda:0')
+        self.val_pct = 0.2  # Percentage of edges for validation
+        self.test_pct = 0.1  # Percentage of edges for testing
+        self.split_labels = True  # Include labels for edge splits
+        self.include_negatives = True  # Include negative edge samples
+
+
+# main function
+if __name__ == "__main__":
+    # Create a grid graph
+    args = arg_params()
+    
+    gen_graph = SyntheticGraphGeneration(
+        m=args.m,
+        n=args.n,
+        emb_dim=args.emb_dim,
+        graph_type=args.graph_type,
+        heterophily=args.heterophily,
+        homophily=args.homophily,
+        feature_type=args.feature_type,
+        cfg=args
+    )
+    
+    data, adj_matrix, nodefeats, splits = gen_graph.generate_graph()
+    print(splits)
+    print(data, '\n')
+    print(data.pos, '\n')
+    print(adj_matrix, '\n')
