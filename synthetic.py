@@ -552,25 +552,7 @@ class SyntheticGraphGeneration:
 
 
 
-def plot_heterophily_graph(G, pos=None, title="Graph", node_size=300, with_labels=True):
-    # Extract node labels
-    node_labels = nx.get_node_attributes(G, 'label')
-    
-    # Determine unique labels and assign colors
-    unique_labels = set(node_labels.values())
-    print(node_labels)
-    colors = ['red', 'black']  # Add more colors if you have more labels
-    
-    # Map node labels to colors
-    color_map = {label: colors[i % len(colors)] for i, label in enumerate(unique_labels)}
-    
-    # Get node colors based on labels
-    node_color = [color_map[node_labels[node]] for node in G.nodes]
-    print(node_color)
-    plt.figure(figsize=(10, 8))
-    nx.draw(G, pos, with_labels=with_labels, node_size=node_size, node_color=node_color, edge_color='gray', font_size=10)
-    plt.title(title)
-    return plt
+
 
 
 class arg_params:
