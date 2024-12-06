@@ -22,11 +22,13 @@ def test_generate_graph_with_different_number_of_rows_and_columns(m, n):
     (0, 4),
     (2, 3)
 ])
+
 @pytest.mark.parametrize("m, n", [
     (4, 4),
     (4, 5),
     (4, 6)
 ])
+
 def test_generate_graph_with_heterophily(graph_type, max_neighbors, m, n):
     gen = SyntheticGraphGeneration(m=m, n=n, emb_dim=6, graph_type=graph_type, heterophily=True)
     data, _, _, _ = gen.generate_graph()
