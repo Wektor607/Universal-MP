@@ -11,14 +11,16 @@
 cd /pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/
 
 # Array of model names
-models=("Custom_GAT" "Custom_GCN" "GraphSAGE" "Custom_GIN" "LINKX")
+models=("Custom_GAT" "Custom_GIN") #"LINKX"  "Custom_GCN" "GraphSAGE"
+nodefeat=("adjacency"  "one-hot" "random" "original")
 
-# Iterate over each model and run the Python script in the background
 for model in "${models[@]}"; do
-    echo "python gcn2struc.py --model "$model" &"
-    python gcn2struc.py --model "$model" &
-done
+    for nodefeat in "${nodefeat[@]}"; do
+        echo "python gcn2struc.py --model "$model" --dataset "ddi" --nodefeat "$nodefeat" --h_key "CN" "
+        python gcn2struc.py --model "$model" --dataset  "ddi"  --nodefeat "$nodefeat" --h_key "CN"
+    done
+done 
+
 
 wait
 
-python gcn2struc.py --model "$model" &

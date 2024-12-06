@@ -18,7 +18,6 @@ from baselines.heuristic import CN as CommonNeighbor
 
 from baselines.GNN import LinkPredictor
 from yacs.config import CfgNode as CN
-from archiv.mlp_heuristic_main import EarlyStopping
 from baselines.LINKX import LINKX
 from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, Custom_GIN
 from baselines.utils import loaddataset
@@ -28,14 +27,65 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch_sparse import SparseTensor
 from tqdm import tqdm 
-from utils import set_random_seeds
+from utils import set_random_seeds, EarlyStopping
 import argparse
 import wandb
 from typing import Dict, Any
+import pickle
+
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 print(f"ROOT: {ROOT}")
-NUM_SEED = 4
+NUM_SEED = 8
+
+# Training parameters 
+
+class Config_ddi_CN:
+    def __init__(self):
+        self.epochs = 1
+        self.dataset = "ddi"
+        self.batch_size = 2**10
+        self.heuristic = "CN" # convergenced for and "CN"
+        self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
+        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        self.use_early_stopping = True
+        self.lr = 0.001
+        
+
+class Config_ddi_PPR:
+    def __init__(self):
+        self.epochs = 1
+        self.dataset = "ddi"
+        self.batch_size = 2**10
+        self.heuristic = "PPR" # convergenced for and "CN"
+        self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
+        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        self.use_early_stopping = True
+        self.lr = 0.001
+        
+        
+class Config_Cora_CN:
+    def __init__(self):
+        self.epochs = 4
+        self.dataset = "Cora"
+        self.batch_size = 2**4
+        self.heuristic = "CN" # convergenced for and "CN"
+        self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
+        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        self.use_early_stopping = True
+        self.ls = 0.04
+
+
+class Config_Cora_PPR:
+    def __init__(self):
+        self.epochs = 4
+        self.dataset = "Cora"
+        self.batch_size = 2**4
+        self.heuristic = "PPR" # convergenced for and "CN"
+        self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
+        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        self.use_early_stopping = True
+        self.ls = 0.001
 
 
 def spmdiff_efficient(adj1: SparseTensor, adj2: SparseTensor, keep_val: bool = False) -> SparseTensor:
@@ -170,12 +220,6 @@ def experiment_loop(args: argparse.Namespace,
     pprint(cfg_encoder)
     pprint(cfg_decoder)
 
-    if not hasattr(splits['train'], 'x') or splits['train'].x is None:
-        cfg_encoder.in_channels = 1024
-    else:
-        cfg_encoder.in_channels = data.x.size(1)
-
-        
     early_stopping = EarlyStopping(patience=5, verbose=True)
 
     cfg_encoder.in_channels = data.x.size(-1)
@@ -246,10 +290,8 @@ def experiment_loop(args: argparse.Namespace,
         data.adj_t = SparseTensor.from_edge_index(splits['train'].edge_index)
         train_loss = train_cn(
             encoder, decoder, optimizer, data, splits, args.batch_size, True, step
-        ) # mask target always True
-
+        ) 
         
-        # Validate every 20 epochs
         if epoch % 1 == 0:
             valid_loss = valid_cn(encoder, decoder, data, splits['valid'], args.batch_size, device)
             
@@ -257,8 +299,6 @@ def experiment_loop(args: argparse.Namespace,
                 f'Epoch: {epoch:03d}, train loss: {train_loss:.4f}, '
                 f'valid loss: {valid_loss:.4f}, '
                 f'Cost Time: {time.time() - start:.4f}s')
-            wandb.log({"epoch": epoch, "train_loss": train_loss, "valid_loss": valid_loss})
-            wandb.log({"valid_loss": valid_loss}, step=step)
             
             if args.use_early_stopping:
                 early_stopping(valid_loss)
@@ -266,15 +306,12 @@ def experiment_loop(args: argparse.Namespace,
                     print("Training stopped early!")
                     break
                 
-                
     data.adj_t = data.full_adj_t
     test_loss = valid_cn(encoder, decoder, data, splits['test'], args.batch_size, device)
-    wandb.log({"test_loss": test_loss})
-
     # Save results to CSV with mean and variance
-    save_to_csv(f'./results/{args.model}2{args.h_key}_{args.dataset}.csv',
+    save_to_csv(f'./results/{args.dataset}/{args.model}2{args.h_key}_{args.dataset}.csv',
                 args.model,
-                args.node_feature,
+                args.nodefeat,
                 args.h_key,
                 test_loss)
     
@@ -284,24 +321,22 @@ def parse_args():
 
     # Training parameters 
     parser.add_argument('--epochs', type=int, default=1, help="Number of training epochs.")
-    parser.add_argument('--dataset', type=str, default="ddi", help="Dataset to use.")
+    parser.add_argument('--dataset', type=str, default="Cora", help="Dataset to use.")
     parser.add_argument('--batch_size', type=int, default=2**10, help="Batch size for training.")
     parser.add_argument('--h_key', type=str, default="CN", help="Heuristic key to use.")
     parser.add_argument('--model', type=str, default="Custom_GAT", 
                         choices = ["LINKX", "Custom_GAT", "Custom_GCN", "GraphSAGE", "Custom_GIN"], 
                         help="Model type to use.")
-    parser.add_argument('--use_feature', action='store_true', help="Use node features.")
-    parser.add_argument('--node_feature', type=str, default="original", 
-                        choices=['original', 'one-hot', 'random', 'quasi-orthogonal', 'adjacency'],
-                        help="Type of node features to use.")
-
+    parser.add_argument('--nodefeat', type=str, default="adjacency", 
+                        choices = ["one-hot", "random", "quasi-orthogonal", "adjacency", "original"],
+                        help="Node feature type to use.")
     # Early stopping
     parser.add_argument('--use_early_stopping', action='store_true', help="Enable early stopping.")
 
     # Optimizer parameters
     parser.add_argument('--lr', type=float, default=0.001, help="Learning rate.")
-    parser.add_argument('--weight_decay', type=float, default=0.0005, help="Weight decay for optimizer.")
-    parser.add_argument('--generate_dataset', action='store_true', help="Generate dataset.")
+    parser.add_argument('--weight_decay', type=float, default=0, help="Weight decay for optimizer.")
+    parser.add_argument('--generate_dataset', type=bool, default=False, help="enable generate dand save dataset.")
     
     return parser.parse_args()
 
@@ -311,88 +346,90 @@ if __name__ == "__main__":
     args = parse_args()
     print(args)
 
-    for i in range(NUM_SEED):
-        set_random_seeds(i)
-        for node_feature in ['adjacency', 'original', 'one-hot', 'random']:
-            args.node_feature = node_feature
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    data, splits = loaddataset(args.dataset, None)
+    data = data.to(device) 
 
-            wandb.init(project="graph-link-prediction", config={
-                "epochs": args.epochs,
-                "dataset": args.dataset,
-                "batch_size": args.batch_size,
-                "h_key": args.h_key,
-                "model": args.model,
-                "lr": args.lr,
-                "weight_decay": 0
-            })
-            
-            config = wandb.config
-            
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            data, splits = loaddataset(args.dataset, None)
-            data = data.to(device) 
+    edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
+    
+    A = ssp.csr_matrix(
+        (edge_weight, (data.edge_index[0].cpu(), data.edge_index[1].cpu())),
+        shape=(data.num_nodes, data.num_nodes)
+    )
+        
+    heuristic = {
+        "CN": CommonNeighbor,
+        "AA": AA,
+        "RA": RA,
+        "PPR": Ben_PPR,
+        "katz": katz_apro,
+        "shortest_path": shortest_path
+    }
 
-            edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
-            
-            A = ssp.csr_matrix(
-                (edge_weight, (data.edge_index[0].cpu(), data.edge_index[1].cpu())),
-                shape=(data.num_nodes, data.num_nodes)
+    if args.generate_dataset:
+        for key in splits:
+            pos_edge_score, _ = heuristic[args.h_key](
+                A, splits[key]['pos_edge_label_index'], batch_size=args.batch_size
             )
-
-            if args.node_feature == 'one-hot':
-                data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
-            elif args.node_feature == 'random':
-                dim_feat = data.x.size(1)
-                data.x = torch.randn(data.num_nodes, dim_feat).to(device)
-            elif args.node_feature == 'adjacency':
-                A_dense = A.toarray()
-                A_tensor = torch.tensor(A_dense)
-                data.x = A_tensor.float().to(device)
-            elif args.node_feature == 'original':
-                pass
-            else:
-                raise NotImplementedError(
-                    f'node_feature: {args.node_feature} is not implemented.'
-                )
-                
-            heuristic = {
-                "CN": CommonNeighbor,
-                "AA": AA,
-                "RA": RA,
-                "PPR": Ben_PPR,
-                "katz": katz_apro,
-                "shortest_path": shortest_path
-            }
-
-            # Heuristic scores
+            neg_edge_score, _ = heuristic[args.h_key](
+                A, splits[key]['neg_edge_label_index'], batch_size=args.batch_size
+            )
             
-            if args.generate_dataset:
-                for key in splits:
-                    pos_edge_score, _ = heuristic[args.h_key](
-                        A, splits[key]['pos_edge_label_index'], batch_size=args.batch_size
-                    )
-                    neg_edge_score, _ = heuristic[args.h_key](
-                        A, splits[key]['neg_edge_label_index'], batch_size=args.batch_size
-                    )
-                    
-                    # Normalize the scores
-                    max_score = pos_edge_score.max()
-                    splits[key]['pos_edge_score'] = pos_edge_score / max_score
-                    splits[key]['neg_edge_score'] = neg_edge_score / max_score
+            # Normalize the scores
+            max_score = pos_edge_score.max()
+            splits[key]['pos_edge_score'] = pos_edge_score / max_score
+            splits[key]['neg_edge_score'] = neg_edge_score / max_score
 
-                import pickle
-                with open(f"{args.dataset}_{args.h_key}_data.pkl", "wb") as f:
-                    pickle.dump(splits, f)
-            
-            import pickle
+        import pickle
+        with open(f"{args.dataset}_{args.h_key}_data.pkl", "wb") as f:
+            pickle.dump(splits, f)
+    else:
+        # Replace 'args.dataset' and 'args.h_key' with your specific file naming variables or values.
+        file_path = ROOT + f"/{args.dataset}_{args.h_key}_data.pkl"
 
-            # Replace 'args.dataset' and 'args.h_key' with your specific file naming variables or values.
-            file_path = f"/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-MP/trials/{args.dataset}_{args.h_key}_data.pkl"
+        # Open the file in 'read binary' mode and load the data
+        with open(file_path, "rb") as f:
+            splits = pickle.load(f)
+        print(f'dataset is loaded: {splits.keys()}')
+    
+    
+    for i in range(NUM_SEED):
+        set_random_seeds(i) 
 
-            # Open the file in 'read binary' mode and load the data
-            with open(file_path, "rb") as f:
-                splits = pickle.load(f)
-            print(f'dataset is loaded: {splits.keys()}')
-            experiment_loop(args, splits, data)
-                
-            #TODO training is instable for LINKX and Custom_GCN try lr log3
+        if args.nodefeat == 'one-hot':
+            data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
+        elif args.nodefeat == 'random':
+            dim_feat = data.x.size(1)
+            data.x = torch.randn(data.num_nodes, data.num_nodes).to(device)
+        elif args.nodefeat == 'quasi-orthogonal':
+            pass 
+        elif args.nodefeat == 'adjacency':
+            A_dense = A.toarray()
+            A_tensor = torch.tensor(A_dense)
+            data.x = A_tensor.float().to(device)
+        elif args.nodefeat == 'original':
+            pass
+        else:
+            raise NotImplementedError(
+                f'nodefeat: {args.nodefeat} is not implemented.'
+            )
+        print(f"initialize project: {args.model}_{args.h_key}_{args.dataset}_{args.nodefeat}_{i}")
+
+        wandb.init(project=f"graph-link-prediction-{args.dataset}-{args.h_key}",     
+                    name = f"run_{args.model}_{args.h_key}_{args.dataset}_{args.nodefeat}_{i}",
+                    config={
+                    "epochs": args.epochs,
+                    "dataset": args.dataset,
+                    "batch_size": args.batch_size,
+                    "h_key": args.h_key,
+                    "model": args.model,
+                    "lr": args.lr,
+                    "weight_decay": 0
+        })
+        
+        config = wandb.config
+        experiment_loop(args, splits, data)
+        wandb.finish()
+        # TODO training is instable for LINKX and Custom_GCN try lr log3
+        # TODO dataloader into repository 
+        # TODO review synehtic graph dataloader 

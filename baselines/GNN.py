@@ -240,19 +240,26 @@ class Custom_GIN(torch.nn.Module):
         self.convs = torch.nn.ModuleList()
         gin_mlp_layer = mlp_layer
 
-        self.mlp1 = MLPModel(
-            in_channels, hidden_channels, hidden_channels, 
-            gin_mlp_layer, dropout
-        )
-        self.convs.append(GINConv(self.mlp1))
-        for _ in range(num_layers - 2):
-            self.mlp = MLPModel(hidden_channels, hidden_channels, 
-                                    hidden_channels, gin_mlp_layer, dropout)
+        if num_layers == 1:
+            self.mlp = MLPModel(
+                in_channels, hidden_channels, hidden_channels, 
+                gin_mlp_layer, dropout
+            )
             self.convs.append(GINConv(self.mlp))
+        else:
+            self.mlp1 = MLPModel(
+                in_channels, hidden_channels, hidden_channels, 
+                gin_mlp_layer, dropout
+            )
+            self.convs.append(GINConv(self.mlp1))
+            for _ in range(num_layers - 2):
+                self.mlp = MLPModel(hidden_channels, hidden_channels, 
+                                        hidden_channels, gin_mlp_layer, dropout)
+                self.convs.append(GINConv(self.mlp))
 
-        self.mlp2 = MLPModel(hidden_channels, hidden_channels, 
-                                out_channels, gin_mlp_layer, dropout)
-        self.convs.append(GINConv(self.mlp2))
+            self.mlp2 = MLPModel(hidden_channels, hidden_channels, 
+                                    out_channels, gin_mlp_layer, dropout)
+            self.convs.append(GINConv(self.mlp2))
 
         self.dropout = dropout
         self.invest = 1
