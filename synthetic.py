@@ -572,6 +572,7 @@ def plot_heterophily_graph(G, pos=None, title="Graph", node_size=300, with_label
     plt.title(title)
     return plt
 
+
 class arg_params:
     def __init__(self):
         self.m = 4  # Number of rows in the grid
@@ -579,7 +580,7 @@ class arg_params:
         self.emb_dim = 32  # Embedding dimension
         self.graph_type = 2  # Type of graph structure: 0 = Square, 1 = Triangle, 2 = Hexagonal
         self.heterophily = False  # Enable heterophily for the graph
-        self.homophily = False  # Enable homophily for the graph
+        self.homophily = True  # Enable homophily for the graph
         self.feature_type = 'random'  # Embedding generation type: 'random', 'one-hot', or 'degree'
         self.undirected = True  # Specify if the graph is undirected
         self.device = 'cpu'  # Device to run computations (e.g., 'cpu' or 'cuda:0')
