@@ -14,7 +14,7 @@ class SyntheticDataset(InMemoryDataset):
         N: int=10000,
     ):
         self.dataset_name = name
-        self.N = N
+        N = N
         super().__init__(root, transform)
         self.load(self.processed_paths[0])
 
@@ -24,10 +24,10 @@ class SyntheticDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self) -> str:
-        return f'{self.dataset_name}_{self.N}.pt'
+        return f'{self.dataset_name}_{N}.pt'
 
     def process(self):
         graph_type_str = f"GraphType.{self.dataset_name}"
-        nx_data = generate_graph(self.N, eval(graph_type_str), seed=0)
+        nx_data = generate_graph(N, eval(graph_type_str), seed=0)
         data = from_networkx(nx_data)
         self.save([data], self.processed_paths[0])

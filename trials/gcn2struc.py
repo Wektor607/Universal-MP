@@ -45,7 +45,7 @@ class Config_ddi_CN:
         self.batch_size = 2**10
         self.heuristic = "CN" # convergenced for and "CN"
         self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
-        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        Nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
         self.use_early_stopping = True
         self.lr = 0.001
         
@@ -57,7 +57,7 @@ class Config_ddi_PPR:
         self.batch_size = 2**10
         self.heuristic = "PPR" # convergenced for and "CN"
         self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
-        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        Nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
         self.use_early_stopping = True
         self.lr = 0.001
         
@@ -69,7 +69,7 @@ class Config_Cora_CN:
         self.batch_size = 2**4
         self.heuristic = "CN" # convergenced for and "CN"
         self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
-        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        Nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
         self.use_early_stopping = True
         self.ls = 0.04
 
@@ -81,7 +81,7 @@ class Config_Cora_PPR:
         self.batch_size = 2**4
         self.heuristic = "PPR" # convergenced for and "CN"
         self.model = "GIN_Variant" #  "GIN_Variant", "GAT", "GCN", "GraphSAGE", "LINKX"
-        self.nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
+        Nodefeat = 'adjacency'  # 'one-hot', 'random', 'quasi-orthogonal'
         self.use_early_stopping = True
         self.ls = 0.001
 

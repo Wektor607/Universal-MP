@@ -196,7 +196,8 @@ class SyntheticGraphGeneration:
         # Convert tensors to NumPy arrays for plotting
         train_cn = train_cn.to('cpu').numpy()
         test_cn = test_cn.to('cpu').numpy()
-        print(train_cn)
+        
+        # print(train_cn)
         plt.figure(figsize=(10, 6))
         sns.kdeplot(train_cn, label='Training', color='red', linewidth=2)
         sns.kdeplot(test_cn, label='Testing', color='blue', linewidth=2)
@@ -549,10 +550,6 @@ class SyntheticGraphGeneration:
         self.plot_common_neighbors_distribution(train_cn, test_cn)
         print(data.num_nodes)
         return data, data.adj_t, data.x, splits
-
-
-
-
 
 
 class arg_params:

@@ -6,7 +6,7 @@ class MLPPolynomial(nn.Module):
     def __init__(self, input_size, hidden_channels, num_series, A, nonlinearity=nn.ReLU, dropout=0.5):
         super(MLPPolynomial, self).__init__()
         self.hidden_channels = hidden_channels
-        self.num_series = num_series
+        Num_series = num_series
         self.dropout = dropout
         # Define three separate linear layers
         self.fc1 = nn.Linear(input_size * num_series, hidden_channels)
@@ -56,7 +56,7 @@ class MLPPolynomialFeatures(nn.Module):
     def __init__(self, input_size, feature_size, hidden_channels, num_series, A, nonlinearity=nn.ReLU, dropout=0.5):
         super(MLPPolynomialFeatures, self).__init__()
         self.hidden_channels = hidden_channels
-        self.num_series = num_series
+        Num_series = num_series
         self.dropout = dropout
         # Define three separate linear layers
         self.fc1 = nn.Linear(input_size * num_series + feature_size, hidden_channels)
@@ -112,7 +112,7 @@ class MLPPolynomialLP(nn.Module):
     def __init__(self, input_size, hidden_channels, num_series, A, nonlinearity=nn.ReLU, dropout=0.5):
         super(MLPPolynomialLP, self).__init__()
         self.hidden_channels = hidden_channels
-        self.num_series = num_series
+        Num_series = num_series
         self.dropout = dropout
         # Define three separate linear layers
         self.fc1 = nn.Linear(input_size * num_series, hidden_channels)

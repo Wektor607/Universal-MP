@@ -31,7 +31,7 @@ class Config:
         self.model = "MLP"
         self.early_stopping = True
         self.use_feature = True
-        self.nodefeat = 'one-hot'
+        Nodefeat = 'one-hot'
         self.heuristic = "PPR"
         self.K = 2
 
@@ -40,13 +40,13 @@ class NNet(nn.Module):
 
     def __init__(self, n_in, n_out, hlayers=(128, 256, 128)):
         super(NNet, self).__init__()
-        self.n_hlayers = len(hlayers)
+        N_hlayers = len(hlayers)
         self.fcs = nn.ModuleList([nn.Linear(n_in, hlayers[i]) if i == 0 else
-                                  nn.Linear(hlayers[i - 1], n_out) if i == self.n_hlayers else
-                                  nn.Linear(hlayers[i - 1], hlayers[i]) for i in range(self.n_hlayers + 1)])
+                                  nn.Linear(hlayers[i - 1], n_out) if i == N_hlayers else
+                                  nn.Linear(hlayers[i - 1], hlayers[i]) for i in range(N_hlayers + 1)])
 
     def forward(self, x):
-        for i in range(self.n_hlayers):
+        for i in range(N_hlayers):
             x = F.relu(self.fcs[i](x))
         x = torch.sigmoid(self.fcs[-1](x))
         return x
@@ -63,11 +63,11 @@ class APoly_MLP(nn.Module):
                  use_nodefeat):
         super(APoly_MLP, self).__init__()
         """data.num_nodes, data.x.size(1), hidden_channels=64, K=2, A=A).to(device)"""
-        # self.num_series = K
+        # Num_series = K
         self.dropout = dropout
 
         # params for MLPs
-        self.n_hlayers = 3
+        N_hlayers = 3
         self.use_nodefeat = use_nodefeat
         if self.use_nodefeat:
             n_in = num_nodes * K + dim_feat  # size of concated A^k and features
@@ -77,8 +77,8 @@ class APoly_MLP(nn.Module):
         n_out = 1
         hlayers = (hidden_dim, hidden_dim, hidden_dim)
         self.mlp_module = nn.ModuleList([nn.Linear(n_in, hlayers[i]) if i == 0 else
-                                         nn.Linear(hlayers[i - 1], n_out) if i == self.n_hlayers else
-                                         nn.Linear(hlayers[i - 1], hlayers[i]) for i in range(self.n_hlayers + 1)])
+                                         nn.Linear(hlayers[i - 1], n_out) if i == N_hlayers else
+                                         nn.Linear(hlayers[i - 1], hlayers[i]) for i in range(N_hlayers + 1)])
         self.dropout = nn.Dropout(p=self.dropout)
 
         self.device = next(self.parameters()).device
@@ -110,7 +110,7 @@ class APoly_MLP(nn.Module):
         else:
             x = A_embK
 
-        for i in range(self.n_hlayers):
+        for i in range(N_hlayers):
             x = x.to(self.mlp_module[i].weight.device)
             x = F.relu(self.mlp_module[i](x))
             x = self.dropout(x)
