@@ -13,14 +13,10 @@ import numpy as np
 from typing import *
 import torch
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import cm
-import seaborn as sns
-from matplotlib.figure import Figure
 from torch_geometric.data import Data, Dataset, InMemoryDataset
-from graph_generation import generate_graph, GraphType
-
-
 from torch_geometric.utils import coalesce, to_undirected, from_networkx
+
+
 
 """
     Generates random graphs of different types of a given size.
@@ -50,42 +46,21 @@ class SyntheticDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self) -> str:
-        return f'{self.dataset_name}_{N}.pt'
+        return f'{self.dataset_name}_{self.N}.pt'
 
     def process(self):
         graph_type_str = f"GraphType.{self.dataset_name}"
-        nx_data = generate_graph(N, eval(graph_type_str), seed=0)
+        nx_data = generate_graph(self.N, eval(graph_type_str), seed=0)
         data = from_networkx(nx_data)
         self.save([data], self.processed_paths[0])
 
 
-class GraphType(Enum):
-    RANDOM = 0
-    ERDOS_RENYI = 1
-    BARABASI_ALBERT = 2
-    GRID = 3
-    SQUARE = 4
-    CAVEMAN = 5
-    TREE = 6
-    LADDER = 7
-    LINE = 8
-    STAR = 9
-    CATERPILLAR = 10
-    LOBSTER = 11
-    TRIANGULAR = 12
-    HEXAGONAL = 13
-
-
-
-# probabilities of each type in case of random type
-MIXTURE = [(GraphType.ERDOS_RENYI, 0.2), (GraphType.BARABASI_ALBERT, 0.2), (GraphType.GRID, 0.05),
-           (GraphType.CAVEMAN, 0.05), (GraphType.TREE, 0.15), (GraphType.LADDER, 0.05),
-           (GraphType.LINE, 0.05), (GraphType.STAR, 0.05), (GraphType.CATERPILLAR, 0.1), (GraphType.LOBSTER, 0.1)]
 
 
 def erdos_renyi(N, degree, seed):
     """ Creates an Erdős-Rényi or binomial graph of size N with degree/N probability of edge creation """
     return nx.fast_gnp_random_graph(N, degree / N, seed, directed=False)
+
 
 
 def barabasi_albert(N, degree, seed):
@@ -100,7 +75,9 @@ def grid(N):
     for i in range(1, int(math.sqrt(N)) + 1):
         if N % i == 0:
             m = i
-    return nx.grid_2d_graph(m, N // m)
+    G =  nx.grid_2d_graph(m, N // m)
+    pos = nx.get_node_attributes(G, 'pos')
+    return G, pos
 
 
 def triangular(N):
@@ -109,7 +86,9 @@ def triangular(N):
     for i in range(1, int(math.sqrt(N)) + 1):
         if N % i == 0:
             m = i
-    return nx.triangular_lattice_graph(m, N // m)
+    G = nx.triangular_lattice_graph(m, N // m)
+    pos = nx.get_node_attributes(G, 'pos')
+    return G, pos
 
 
 def hexagonal(N):
@@ -118,7 +97,9 @@ def hexagonal(N):
     for i in range(1, int(math.sqrt(N)) + 1):
         if N % i == 0:
             m = i
-    return nx.hexagonal_lattice_graph(m, N // m)
+    G = nx.hexagonal_lattice_graph(m, N // m)
+    pos = nx.get_node_attributes(G, 'pos')
+    return G, pos
 
 
 def caveman(N):
@@ -127,7 +108,8 @@ def caveman(N):
     for i in range(1, int(math.sqrt(N)) + 1):
         if N % i == 0:
             m = i
-    return nx.caveman_graph(m, N // m)
+    G = nx.caveman_graph(m, N // m)
+    return G
 
 
 def tree(N, seed):
@@ -148,7 +130,6 @@ def ladder(N):
 def line(N):
     """ Creates a graph composed of N nodes in a line """
     return nx.path_graph(N)
-
 
 def star(N):
     """ Creates a graph composed by one center node connected N-1 outer nodes """
@@ -228,7 +209,7 @@ def square_grid(M, N, seed) -> Tuple[nx.Graph, Dict[int, Tuple[float, float]]]:
         It assigns 'random edge weights' from Uniform distribution and optional node labels based on heterophily or homophily settings.
 
     """
-    #TODO to be classified within this graph class
+    np.random.seed(seed)
     num_nodes: int = M * N
     adj_matrix: np.ndarray = np.zeros((num_nodes, num_nodes), dtype=int)
     
@@ -264,8 +245,9 @@ def square_grid(M, N, seed) -> Tuple[nx.Graph, Dict[int, Tuple[float, float]]]:
     return G, pos
 
 
-def create_kagome_lattice(m, n):
+def create_kagome_lattice(m, n, seed):
     """ Create a Kagome lattice and return its NetworkX graph and positions. """
+    np.random.seed(seed)
     G = nx.Graph()
     pos = {}
     
@@ -343,11 +325,35 @@ def init_nodefeats(self, G: nx.Graph) -> torch.Tensor:
     return nodefeats
 
 
+class GraphType(Enum):
+    RANDOM = 0
+    ERDOS_RENYI = 1
+    BARABASI_ALBERT = 2
+    GRID = 3
+    SQUARE = 4
+    CAVEMAN = 5
+    TREE = 6
+    LADDER = 7
+    LINE = 8
+    STAR = 9
+    CATERPILLAR = 10
+    LOBSTER = 11
+    TRIANGULAR = 12
+    HEXAGONAL = 13
+
+# probabilities of each type in case of random type
+MIXTURE = [(GraphType.ERDOS_RENYI, 0.2), (GraphType.BARABASI_ALBERT, 0.2), (GraphType.GRID, 0.05),
+           (GraphType.CAVEMAN, 0.05), (GraphType.TREE, 0.15), (GraphType.LADDER, 0.05),
+           (GraphType.LINE, 0.05), (GraphType.STAR, 0.05), (GraphType.CATERPILLAR, 0.1), (GraphType.LOBSTER, 0.1)]
+
+
+
 def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
     """
-    Generates random graphs of different types of a given size. Note:
-     - graph are undirected and without weights on edges
+    Generates graphs of different types of a given size. Note:
+     - graph are undirected and without weights on edges for random types
      - node values are sampled independently from U[0,1]
+     - node features are initialized with the node degree, position or random values
 
     :param N:       number of nodes
     :param type:    type chosen between the categories specified in GraphType enum
@@ -362,7 +368,8 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
     # sample which random type to use
     if type == GraphType.RANDOM:
         type = np.random.choice([t for (t, _) in MIXTURE], 1, p=[pr for (_, pr) in MIXTURE])[0]
-
+        print(f"Randomly selected graph type: {type}")
+        
     # generate the graph structure depending on the type
     if type == GraphType.ERDOS_RENYI:
         if degree == None: degree = random.random() * N
@@ -371,11 +378,11 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
         if degree == None: degree = int(random.random() * (N - 1)) + 1
         G = barabasi_albert(N, degree, seed)
     elif type == GraphType.GRID:
-        G = grid(N)
+        G, pos = grid(N)
     elif type == GraphType.TRIANGULAR:
-        G = triangular(N)
+        G, pos = triangular(N)
     elif type == GraphType.HEXAGONAL:
-        G = hexagonal(N)
+        G, pos = hexagonal(N)
     elif type == GraphType.CAVEMAN:
         G = caveman(N)
     elif type == GraphType.TREE:
@@ -391,176 +398,66 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
     elif type == GraphType.LOBSTER:
         G = lobster(N, seed)
     elif type == GraphType.SQUARE:
-        G = square_grid(N, seed)
+        G, pos = square_grid(N, N, seed)
     else:
         raise ValueError("Graph type not recognized")
 
     # generate adjacency matrix and nodes values
-    if type == GraphType.RANDOM:
-        nodes = list(G)
-        random.shuffle(nodes)
-        adj_matrix = nx.to_numpy_array(G, nodes)
-        node_values = np.random.uniform(low=0, high=1, size=N)
-        adj_matrix = randomize(adj_matrix)
-    else:
-        node_values = init_nodefeats(G)
+    # TREE, ERDOS_RENSI
+    nodes = list(G)
+    random.shuffle(nodes)
+    adj_matrix = nx.to_numpy_array(G, nodes)
+    adj_matrix = randomize(adj_matrix)
+    node_values = np.random.uniform(low=0, high=1, size=N)
         
     # draw the graph created
-    # import pdb; pdb.set_trace()
-    # nx.draw(G, pos=nx.spring_layout(G))
-    # plt.draw()
+    plt.figure()
+    nx.draw(G, pos=nx.spring_layout(G))
+    plt.savefig('draw.png')
 
     return adj_matrix, node_values, type
 
-
-def calc_cn(self, ei: torch.Tensor, adj: 'scipy.sparse.csr_matrix', bs: int = 10000) -> torch.FloatTensor:
-    """
-    Computes the number of common neighbors for node pairs in `ei` using adjacency matrix `adj`.
-
-    Input:
-    - ei (torch.Tensor): Shape (2, E), where E is the number of edges.
-    - adj ('scipy.sparse.csr_matrix'): Graph adjacency matrix in CSR format.
-    - bs (int): Batch size for processing node pairs. Default is 10000.
-
-    Output:
-    - torch.FloatTensor: Tensor containing the number of common neighbors for each pair of nodes in `ei`.
-    """
-    ll = torch.utils.data.DataLoader(range(ei.size(1)), bs)
-    sc = []
-
-    for idx in ll:
-        s, d = ei[0, idx].to('cpu'), ei[1, idx].to('cpu')
-        cur_sc = np.array(adj[s].multiply(adj[d]).sum(axis=1)).flatten()
-        sc.append(cur_sc)
-
-    sc = np.concatenate(sc, axis=0)
-    return torch.FloatTensor(sc)
-
-
-def plot_cn_dist(self, tr_cn: torch.FloatTensor, te_cn: torch.FloatTensor) -> None:
-    """
-    Generates a density plot of the number of common neighbors for training and testing datasets.
-
-    Input:
-    - tr_cn (torch.FloatTensor): Tensor with common neighbors for the training dataset.
-    - te_cn (torch.FloatTensor): Tensor with common neighbors for the testing dataset.
-
-    Output:
-    - None: Saves the plot as a PNG file.
-
-    Description:
-    This function uses Kernel Density Estimation (KDE) via Seaborn to visualize the distribution of common neighbors
-    for both training and testing datasets.
-    """
-    # Convert tensors to NumPy arrays
-    tr_cn = tr_cn.to('cpu').numpy()
-    te_cn = te_cn.to('cpu').numpy()
-
-    # Plot the distributions
-    plt.figure(figsize=(10, 6))
-    sns.kdeplot(tr_cn, label='Train', color='red', linewidth=2)
-    sns.kdeplot(te_cn, label='Test', color='blue', linewidth=2)
-    plt.xlabel('Common Neighbors')
-    plt.ylabel('Density')
-    plt.legend()
-    plt.title('Common Neighbors Distribution')
-    plt.savefig(f'{FILE_PATH}/cn_dist.png')
-
-
-def plot_color_graph(self, G: nx.Graph, pos: Optional[Dict[int, Tuple[float, float]]] = None, 
-                        title: str = "Graph", node_size: int = 300, with_labels: bool = True) -> Figure:
-    """
-    Input:
-    ----------
-    G : nx.Graph
-        The NetworkX graph to be plotted.
-    pos : Optional[Dict[int, Tuple[float, float]]], default=None
-        A dictionary of node positions, where keys are node indices and values are (x, y) coordinates.
-    title : str, default="Graph"
-        The title of the graph plot.
-    node_size : int, default=300
-        The size of the nodes in the plot.
-    with_labels : bool, default=True
-        Whether or not to display labels on the nodes.
-
-    Output:
-    -------
-    Figure
-        The matplotlib figure object representing the final graph plot.
-
-    Description:
-    -----------
-        This function plots a colored graph where each node's color represents its label.
-    """
-    node_labels: Dict[int, Any] = nx.get_node_attributes(G, 'label')
-    
-    unique_labels: Set[Any] = set(node_labels.values())
-    
-    colors: List[str] = ['red', 'black']  # Add more colors if you have more labels
-    
-    color_map: Dict[Any, str] = {label: colors[i % len(colors)] for i, label in enumerate(unique_labels)}
-    
-    node_color: List[str] = [color_map[node_labels[node]] for node in G.nodes]
-    
-    plt.figure(figsize=(10, 8))
-    nx.draw(G, pos, with_labels=with_labels, node_size=node_size, node_color=node_color, 
-            edge_color='gray', font_size=10)
-    plt.title(title)
-    return plt.gcf()
-
-
-def plot_degree_histogram(self, G: nx.Graph) -> Figure:
-    """
-    Input:
-    ----------
-    G : nx.Graph
-        The NetworkX graph whose degree distribution will be plotted.
-
-    Output:
-    -------
-    Figure
-        The matplotlib figure object representing the histogram plot.
-
-    Description:
-    -----------
-        This function plots a histogram of the node degree frequency distribution for a graph.
-
-    """
-    
-    degrees: List[int] = [val for (_, val) in G.degree()]
-    
-    # Get the unique degrees and their frequencies
-    degree_counts: np.ndarray = np.bincount(degrees)
-    degrees_unique: np.ndarray = np.arange(len(degree_counts))
-    
-    # Normalize the frequencies for colormap
-    max_count: int = max(degree_counts)
-    normalized_counts: np.ndarray = np.array(degree_counts) / max_count if max_count > 0 else degree_counts
-    colors = cm.Blues(normalized_counts)
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.bar(degrees_unique, degree_counts, color=colors, align='center')
-    
-    ax.set_xlabel('Degree')
-    ax.set_ylabel('Frequency')
-    ax.set_title('Degree Distribution Histogram')
-    ax.set_xlim(0, 10)
-    
-    return fig
 
 
 
 if __name__ == '__main__':
     # TODO compare regular tilling with existiing graphs
     # params -> graph
-    for i in range(100):
-        adj_matrix, node_values, type = generate_graph(10, GraphType.RANDOM, seed=i)
+    
+    # RANDOM = 0
+    # ERDOS_RENYI = 1
+    # BARABASI_ALBERT = 2
+    # GRID = 3
+    # SQUARE = 4
+    # CAVEMAN = 5
+    # TREE = 6
+    # LADDER = 7
+    # LINE = 8
+    # STAR = 9
+    # CATERPILLAR = 10
+    # LOBSTER = 11
+    # TRIANGULAR = 12
+    # HEXAGONAL = 13
+    
+    for i, g_type in enumerate([
+                             GraphType.ERDOS_RENYI, 
+                             GraphType.BARABASI_ALBERT, 
+                             GraphType.GRID, 
+                             GraphType.SQUARE, 
+                             GraphType.CAVEMAN, 
+                             GraphType.TREE, 
+                             GraphType.LADDER, 
+                             GraphType.LINE, 
+                             GraphType.STAR, 
+                             GraphType.CATERPILLAR, 
+                             GraphType.LOBSTER, 
+                             GraphType.TRIANGULAR, 
+                             GraphType.HEXAGONAL]):
+        
+        adj_matrix, node_values, type = generate_graph(10, g_type, seed=i)
+        
     print(adj_matrix)
-
-    pos = None
-    plt = plot_color_graph(G, pos, title="Grid Graph")
-    plt.savefig('grid_graph.png')
-    plt.close()
+    
     
     # graph -> split -> .pt 
     
