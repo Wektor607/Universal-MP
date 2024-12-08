@@ -16,12 +16,14 @@ import torch
 import matplotlib.pyplot as plt
 import torch_geometric.transforms as T
 from torch_geometric.data import Data, Dataset, InMemoryDataset
-from torch_geometric.utils import coalesce, to_undirected, from_networkx
 from baselines.utils import plot_color_graph
 from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.utils import from_networkx, to_undirected, is_undirected
 from baselines.utils import plot_graph
-
+from torch_geometric.utils import (to_undirected, 
+                                coalesce, 
+                                remove_self_loops,
+                                from_networkx)
 
 """
     Generates random graphs of different types of a given size.
@@ -200,7 +202,6 @@ MIXTURE = [(RandomType.ERDOS_RENYI, 0.2), (RandomType.BARABASI_ALBERT, 0.2), (Ra
            (RandomType.LINE, 0.05), (RandomType.STAR, 0.05), (RandomType.CATERPILLAR, 0.1), (RandomType.LOBSTER, 0.1)]
 
 
-
 def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
     
     """
@@ -250,23 +251,25 @@ def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
     else:
         raise ValueError("Graph type not recognized")
 
-    # generate adjacency matrix and nodes values
     nodes = list(G)
     random.shuffle(nodes)
     adj_matrix = nx.to_numpy_array(G, nodes)
     adj_matrix = randomize(adj_matrix)
     node_values = np.random.uniform(low=0, high=1, size=N)
         
-    # draw the graph created
+
     plt.figure()
     try:
         plot = plot_graph(G, pos)
     except:
         plot = plot_graph(G)
-    # nx.draw(G, pos=nx.spring_layout(G))
+
     plot.savefig('draw.png')
         
     return G, adj_matrix, node_values, type
+
+
+
 
 
 class SyntheticDataset(InMemoryDataset):
@@ -345,6 +348,16 @@ def init_pyg_random(N: int,
     row, col, _ = data.adj_t.coo()
     data.edge_index = torch.stack([col, row], dim=0)
 
+    if data.is_directed():
+        data.edge_index = to_undirected(data.edge_index)
+        undirected = True
+    
+    data.edge_index, _ = coalesce(data.edge_index, None, num_nodes=data.num_nodes)
+    data.edge_index, _ = remove_self_loops(data.edge_index)
+    
+    if undirected:
+        data = to_undirected(data)
+        
     if  undirected:
         data.edge_index = to_undirected(data.edge_index, data.edge_weight, reduce='add')[0]
         data.edge_weight = torch.ones(data.edge_index.size(1), dtype=float)

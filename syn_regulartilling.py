@@ -14,9 +14,15 @@ from typing import *
 import torch
 import matplotlib.pyplot as plt
 from torch_geometric.data import Data, Dataset, InMemoryDataset
-from torch_geometric.utils import coalesce, to_undirected, from_networkx
 from baselines.utils import plot_color_graph, plot_graph
 from syn_random import randomize
+import torch_geometric.transforms as T
+from torch_geometric.utils import (to_undirected, 
+                                coalesce, 
+                                remove_self_loops,
+                                from_networkx)
+import scipy.sparse as sp
+from syn_random import init_nodefeats, random_edge_split
 
 """
     Generates random graphs of different types of a given size.
@@ -157,6 +163,47 @@ def kagome_lattice(m, n, seed):
     return G, pos
 
 
+
+def init_pyg_regtil(N: int, 
+                    g_type: RegularTilling,
+                    seed: int,
+                    undirected = True,
+                    val_pct = 0.15,
+                    test_pct = 0.05,
+                    split_labels = True, 
+                    include_negatives = True) -> Tuple[Data, Data, Data]:
+    
+    G, _, _ = init_regular_tilling(N, g_type, seed)
+    data = from_networkx(G)
+    
+    data.edge_index, _ = coalesce(data.edge_index, None, num_nodes=data.num_nodes)
+    data.edge_index, _ = remove_self_loops(data.edge_index)
+    
+    if undirected:
+        data.edge_index = to_undirected(data.edge_index, num_nodes=data.num_nodes)
+        undirected = True
+        
+    data.x = init_nodefeats(G, 'random', int(np.log(N)) + 16)
+
+    data = T.ToSparseTensor()(data)
+    
+    row, col, _ = data.adj_t.coo()
+    data.edge_index = torch.stack([col, row], dim=0)
+    data.edge_weight = data.adj_t.to_torch_sparse_csc_tensor().values()
+    data.adj_t = sp.csr_matrix((data.edge_weight.cpu(), (data.edge_index[0].cpu(), data.edge_index[1].cpu())), 
+                shape=(data.num_nodes, data.num_nodes))
+
+    splits = random_edge_split(data,
+                undirected,
+                'cpu',
+                val_pct, # val_pct = 0.15
+                test_pct, # test_pct =  0.5,
+                split_labels, # split_labels = True,
+                include_negatives)  # include_negatives = False
+
+    return data, splits
+
+
 def init_regular_tilling(N, type=RegularTilling.SQUARE_GRID, seed=None):
     if type == RegularTilling.TRIANGULAR:
         G, pos = triangular(N)
@@ -171,9 +218,7 @@ def init_regular_tilling(N, type=RegularTilling.SQUARE_GRID, seed=None):
     nodes = list(G)
     random.shuffle(nodes)
     adj_matrix = nx.to_numpy_array(G, nodes)
-    adj_matrix = randomize(adj_matrix)
-    node_values = np.random.uniform(low=0, high=1, size=N)
-        
+    
     # draw the graph created
     plt.figure()
     try:
@@ -183,9 +228,12 @@ def init_regular_tilling(N, type=RegularTilling.SQUARE_GRID, seed=None):
 
     plot.savefig('draw.png')
 
-    return adj_matrix, node_values, type
+    return G, adj_matrix, type
+
+
 
 if __name__ == '__main__':
+    N = 40
     for i, g_type in enumerate([
                              RegularTilling.TRIANGULAR, 
                              RegularTilling.HEXAGONAL, 
@@ -193,6 +241,14 @@ if __name__ == '__main__':
                              RegularTilling.KAGOME_LATTICE, 
                              ]):
         
-        adj_matrix, node_values, type = init_regular_tilling(10, g_type, seed=i)
-        
-    print(adj_matrix)
+        data, splits = init_pyg_regtil(N, 
+                g_type,
+                i,
+                undirected = True,
+                val_pct = 0.15,
+                test_pct = 0.05,
+                split_labels = True, 
+                include_negatives = True)
+    
+    print(data)
+    print(splits)
