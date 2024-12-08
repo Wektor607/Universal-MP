@@ -79,13 +79,13 @@ class Custom_GAT(torch.nn.Module):
 
         self.hidden_channels = hidden_channels
         self.out_channels = out_channels
-        self.num_layers = num_layers
+        Num_layers = num_layers
         self.head = head
         self.in_channels = in_channels
         self.dropout = dropout
 
         self.convs = torch.nn.ModuleList()
-        if self.num_layers == 1:
+        if Num_layers == 1:
             out_channels = int(self.out_channels / self.head)
             self.convs.append(
                 GATConv(self.in_channels, out_channels, heads=self.head))
@@ -94,7 +94,7 @@ class Custom_GAT(torch.nn.Module):
             self.convs.append(
                 GATConv(self.in_channels, hidden_channels, heads=self.head))
 
-            for _ in range(self.num_layers - 2):
+            for _ in range(Num_layers - 2):
                 self.convs.append(
                     GATConv(
                         self.hidden_channels, hidden_channels, heads=self.head
@@ -198,7 +198,7 @@ class MLPModel(torch.nn.Module):
         if num_layers > 1:
             self.layers.append(torch.nn.Linear(hidden_channels, out_channels))
 
-        self.num_layers = num_layers
+        Num_layers = num_layers
 
     def reset_parameters(self):
         """
@@ -291,7 +291,7 @@ class DGCNN(torch.nn.Module):
         super(DGCNN, self).__init__()
 
         self.use_feature = use_feature
-        self.node_embedding = node_embedding
+        Node_embedding = node_embedding
 
         if k <= 1:  # Transform percentile to number.
             if train_dataset is None:
@@ -312,7 +312,7 @@ class DGCNN(torch.nn.Module):
         initial_channels = hidden_channels
         if self.use_feature:
             initial_channels += train_dataset.num_features
-        if self.node_embedding is not None:
+        if Node_embedding is not None:
             initial_channels += node_embedding.embedding_dim
 
         self.convs.append(GNN(initial_channels, hidden_channels))
@@ -350,8 +350,8 @@ class DGCNN(torch.nn.Module):
             x = torch.cat([z_emb, x.to(torch.float)], 1)
         else:
             x = z_emb
-        if self.node_embedding is not None and node_id is not None:
-            n_emb = self.node_embedding(node_id)
+        if Node_embedding is not None and node_id is not None:
+            n_emb = Node_embedding(node_id)
             x = torch.cat([x, n_emb], 1)
         xs = [x]
 
@@ -533,14 +533,14 @@ class LINKX(torch.nn.Module):
     ):
         super().__init__()
 
-        self.num_nodes = num_nodes
+        Num_nodes = num_nodes
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.num_edge_layers = num_edge_layers
+        Num_edge_layers = num_edge_layers
 
         self.edge_lin = SparseLinear(num_nodes, hidden_channels)
 
-        if self.num_edge_layers > 1:
+        if Num_edge_layers > 1:
             self.edge_norm = BatchNorm1d(hidden_channels)
             channels = [hidden_channels] * num_edge_layers
             self.edge_mlp = MLP(channels, dropout=0., act_first=True)
@@ -549,7 +549,7 @@ class LINKX(torch.nn.Module):
             self.edge_mlp = None
 
         channels = [in_channels] + [hidden_channels] * num_node_layers
-        self.node_mlp = MLP(channels, dropout=0., act_first=True)
+        Node_mlp = MLP(channels, dropout=0., act_first=True)
 
         self.cat_lin1 = torch.nn.Linear(hidden_channels, hidden_channels)
         self.cat_lin2 = torch.nn.Linear(hidden_channels, hidden_channels)
@@ -566,7 +566,7 @@ class LINKX(torch.nn.Module):
             self.edge_norm.reset_parameters()
         if self.edge_mlp is not None:
             self.edge_mlp.reset_parameters()
-        self.node_mlp.reset_parameters()
+        Node_mlp.reset_parameters()
         self.cat_lin1.reset_parameters()
         self.cat_lin2.reset_parameters()
         self.final_mlp.reset_parameters()
@@ -588,14 +588,14 @@ class LINKX(torch.nn.Module):
         out = out + self.cat_lin1(out)
 
         if x is not None:
-            x = self.node_mlp(x)
+            x = Node_mlp(x)
             out = out + x
             out = out + self.cat_lin2(x)
 
         return self.final_mlp(out.relu_())
 
     def __repr__(self) -> str:
-        return (f'{self.__class__.__name__}(num_nodes={self.num_nodes}, '
+        return (f'{self.__class__.__name__}(num_nodes={Num_nodes}, '
                 f'in_channels={self.in_channels}, '
                 f'out_channels={self.out_channels})')
         
