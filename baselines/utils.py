@@ -116,6 +116,22 @@ def plot_color_graph(G: nx.Graph, pos: Optional[Dict[int, Tuple[float, float]]] 
     return plt
 
 
+def plot_graph(G, pos=None, 
+               title="Graph", 
+               node_size=None, 
+               node_color='skyblue', 
+               with_labels=True):
+    plt.figure(figsize=(10, 8))
+    nx.draw(G, pos, 
+            with_labels=with_labels,
+            node_size=node_size, 
+            node_color=node_color, 
+            edge_color='gray', 
+            font_size=10)
+    plt.title(title)
+    return plt
+
+
 def plot_degree_histogram(G: nx.Graph) -> Figure:
     """
     Input:

@@ -25,38 +25,9 @@ from baselines.utils import plot_color_graph
 """
 
 
-class SyntheticDataset(InMemoryDataset):
-    def __init__(
-        self,
-        root: str,
-        name: str,
-        transform=None,
-        N: int=10000,
-    ):
-        self.dataset_name = name
-        N = N
-        super().__init__(root, transform)
-        self.load(self.processed_paths[0])
-
-    @property
-    def processed_dir(self) -> str:
-        return osp.join(self.root, self.__class__.__name__, 'processed')
-
-    @property
-    def processed_file_names(self) -> str:
-        return f'{self.dataset_name}_{self.N}.pt'
-
-    def process(self):
-        graph_type_str = f"GraphType.{self.dataset_name}"
-        nx_data = generate_graph(self.N, eval(graph_type_str), seed=0)
-        data = from_networkx(nx_data)
-        self.save([data], self.processed_paths[0])
-
-
 def erdos_renyi(N, degree, seed):
     """ Creates an Erdős-Rényi or binomial graph of size N with degree/N probability of edge creation """
     return nx.fast_gnp_random_graph(N, degree / N, seed, directed=False)
-
 
 
 def barabasi_albert(N, degree, seed):
@@ -74,25 +45,6 @@ def grid(N):
     G =  nx.grid_2d_graph(m, N // m)
     return G
 
-
-def triangular(N):
-    """ Creates a m x k 2d grid triangular graph with N = m*k and m and k as close as possible """
-    m = 1
-    for i in range(1, int(math.sqrt(N)) + 1):
-        if N % i == 0:
-            m = i
-    G = nx.triangular_lattice_graph(m, N // m)
-    return G
-
-
-def hexagonal(N):
-    """ Creates a m x k 2d grid hexagonal graph with N = m*k and m and k as close as possible """
-    m = 1
-    for i in range(1, int(math.sqrt(N)) + 1):
-        if N % i == 0:
-            m = i
-    G = nx.hexagonal_lattice_graph(m, N // m)
-    return G
 
 
 def caveman(N):
@@ -160,6 +112,13 @@ def lobster(N, seed):
     return G
 
 
+def random_grid_graph(m, n):
+    """ Create a grid graph and return its NetworkX graph and positions. """
+    G = nx.grid_2d_graph(m, n)
+    pos = {(x, y): (x, y) for x, y in G.nodes()}
+    return G, pos
+
+
 def randomize(A):
     """ Adds some randomness by toggling some edges without chancing the expected number of edges of the graph """
     BASE_P = 0.9
@@ -190,57 +149,6 @@ def randomize(A):
     return ans
 
 
-def square_grid(M, N, seed) -> Tuple[nx.Graph, Dict[int, Tuple[float, float]]]:
-    """
-    Output:
-    -------
-    Tuple[nx.Graph, Dict[int, Tuple[float, float]]]
-        A tuple containing the square grid graph and the node positions.
-
-    Description:
-    -----------
-        This function generates a square grid graph with m rows and n columns.
-        It assigns 'random edge weights' from Uniform distribution 
-        and optional node labels based on heterophily or homophily settings.
-
-    """
-    np.random.seed(seed)
-    num_nodes: int = M * N
-    adj_matrix: np.ndarray = np.zeros((num_nodes, num_nodes), dtype=int)
-    
-    def node_id(x: int, y: int) -> int:
-        return x * N + y
-    
-    for x in range(M):
-        for y in range(N):
-            current_id = node_id(x, y)
-            
-            # Right neighbor
-            if y < N - 1:
-                right_id = node_id(x, y + 1)
-                adj_matrix[current_id, right_id] = 1
-                adj_matrix[right_id, current_id] = 1
-                
-            # Down neighbor
-            if x < M - 1:
-                down_id = node_id(x + 1, y)
-                adj_matrix[current_id, down_id] = 1
-                adj_matrix[down_id, current_id] = 1
-
-    pos: Dict[int, Tuple[float, float]] = {(x * N + y): (y, x) for x in range(M) for y in range(N)}
-
-    G = nx.from_numpy_array(adj_matrix)
-    
-    for u, v in G.edges():
-        G[u][v]['weight'] = random.uniform(0.1, 1.0)
-    
-    for node, position in pos.items():
-        G.nodes[node]['pos'] = position
-    
-    return G, pos
-
-
-
 def init_nodefeats(self, G: nx.Graph) -> torch.Tensor:
     """
     Input:
@@ -268,35 +176,31 @@ def init_nodefeats(self, G: nx.Graph) -> torch.Tensor:
         nodefeats: torch.Tensor = torch.tensor(degree, dtype=torch.float32).view(-1, 1)
         
     return nodefeats
-
-
-class GraphType(Enum):
+    
+    
+class RandomType(Enum):
     RANDOM = 0
     ERDOS_RENYI = 1
     BARABASI_ALBERT = 2
     GRID = 3
-    SQUARE = 4
-    CAVEMAN = 5
-    TREE = 6
-    LADDER = 7
-    LINE = 8
-    STAR = 9
-    CATERPILLAR = 10
-    LOBSTER = 11
-    TRIANGULAR = 12
-    HEXAGONAL = 13
-    SQUARE_GRID  = 14
-    KAGOME_LATTICE = 15
+    CAVEMAN = 4
+    TREE = 5
+    LADDER = 6
+    LINE = 7
+    STAR = 8
+    CATERPILLAR = 9
+    LOBSTER = 10
+
 
 
 # probabilities of each type in case of random type
-MIXTURE = [(GraphType.ERDOS_RENYI, 0.2), (GraphType.BARABASI_ALBERT, 0.2), (GraphType.GRID, 0.05),
-           (GraphType.CAVEMAN, 0.05), (GraphType.TREE, 0.15), (GraphType.LADDER, 0.05),
-           (GraphType.LINE, 0.05), (GraphType.STAR, 0.05), (GraphType.CATERPILLAR, 0.1), (GraphType.LOBSTER, 0.1)]
+MIXTURE = [(RandomType.ERDOS_RENYI, 0.2), (RandomType.BARABASI_ALBERT, 0.2), (RandomType.GRID, 0.05),
+           (RandomType.CAVEMAN, 0.05), (RandomType.TREE, 0.15), (RandomType.LADDER, 0.05),
+           (RandomType.LINE, 0.05), (RandomType.STAR, 0.05), (RandomType.CATERPILLAR, 0.1), (RandomType.LOBSTER, 0.1)]
 
 
 
-def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
+def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
     # TODO seperate random graph with regular tilling graph
     """
     Generates graphs of different types of a given size. Note:
@@ -305,7 +209,7 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
      - node features are initialized with the node degree, position or random values
 
     :param N:       number of nodes
-    :param type:    type chosen between the categories specified in GraphType enum
+    :param type:    type chosen between the categories specified in RandomType enum
     :param seed:    random seed
     :param degree:  average degree of a node, only used in some graph types
     :return:        adj_matrix: N*N numpy matrix
@@ -315,46 +219,41 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
     np.random.seed(seed)
 
     # sample which random type to use
-    if type == GraphType.RANDOM:
+    if type == RandomType.RANDOM:
         type = np.random.choice([t for (t, _) in MIXTURE], 1, p=[pr for (_, pr) in MIXTURE])[0]
         print(f"Randomly selected graph type: {type}")
         
     # generate the graph structure depending on the type
-    if type == GraphType.ERDOS_RENYI:
+    if type == RandomType.ERDOS_RENYI:
         if degree == None: degree = random.random() * N
         G = erdos_renyi(N, degree, seed)
-    elif type == GraphType.BARABASI_ALBERT:
+    elif type == RandomType.BARABASI_ALBERT:
         if degree == None: degree = int(random.random() * (N - 1)) + 1
         G = barabasi_albert(N, degree, seed)
-    elif type == GraphType.GRID:
+    elif type == RandomType.GRID:
         G, pos = grid(N)
-    elif type == GraphType.TRIANGULAR:
-        G, pos = triangular(N)
-    elif type == GraphType.HEXAGONAL:
-        G, pos = hexagonal(N)
-    elif type == GraphType.CAVEMAN:
+    elif type == RandomType.CAVEMAN:
         G = caveman(N)
-    elif type == GraphType.TREE:
+    elif type == RandomType.TREE:
         G = tree(N, seed)
-    elif type == GraphType.LADDER:
+    elif type == RandomType.LADDER:
         G = ladder(N)
-    elif type == GraphType.LINE:
+    elif type == RandomType.LINE:
         G = line(N)
-    elif type == GraphType.STAR:
+    elif type == RandomType.STAR:
         G = star(N)
-    elif type == GraphType.CATERPILLAR:
+    elif type == RandomType.CATERPILLAR:
         G = caterpillar(N, seed)
-    elif type == GraphType.LOBSTER:
+    elif type == RandomType.LOBSTER:
         G = lobster(N, seed)
-    elif type == GraphType.SQUARE:
-        G, pos = square_grid(N, N, seed)
-    elif type == GraphType.SQUARE_GRID:
-        G, pos = square_grid(2, N // 2, seed)
-    elif type == GraphType.KAGOME_LATTICE:
-        G, pos = create_kagome_lattice(2, N // 2, seed)
     else:
         raise ValueError("Graph type not recognized")
 
+    # probabilities of each type in case of random type
+    MIXTURE = [(RandomType.ERDOS_RENYI, 0.2), (RandomType.BARABASI_ALBERT, 0.2), (RandomType.GRID, 0.05),
+            (RandomType.CAVEMAN, 0.05), (RandomType.TREE, 0.15), (RandomType.LADDER, 0.05),
+            (RandomType.LINE, 0.05), (RandomType.STAR, 0.05), (RandomType.CATERPILLAR, 0.1), (RandomType.LOBSTER, 0.1)]
+        
     # generate adjacency matrix and nodes values
     # TREE, ERDOS_RENSI
     nodes = list(G)
@@ -375,6 +274,32 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
     return adj_matrix, node_values, type
 
 
+class SyntheticDataset(InMemoryDataset):
+    def __init__(
+        self,
+        root: str,
+        name: str,
+        transform=None,
+        N: int=10000,
+    ):
+        self.dataset_name = name
+        N = N
+        super().__init__(root, transform)
+        self.load(self.processed_paths[0])
+
+    @property
+    def processed_dir(self) -> str:
+        return osp.join(self.root, self.__class__.__name__, 'processed')
+
+    @property
+    def processed_file_names(self) -> str:
+        return f'{self.dataset_name}_{self.N}.pt'
+
+    def process(self):
+        graph_type_str = f"RandomType.{self.dataset_name}"
+        nx_data = init_random_graph(self.N, eval(graph_type_str), seed=0)
+        data = from_networkx(nx_data)
+        self.save([data], self.processed_paths[0])
 
 
 if __name__ == '__main__':
@@ -397,24 +322,19 @@ if __name__ == '__main__':
     # HEXAGONAL = 13
     
     for i, g_type in enumerate([
-                             GraphType.ERDOS_RENYI, 
-                             GraphType.BARABASI_ALBERT, 
-                             GraphType.GRID, 
-                             GraphType.SQUARE, 
-                             GraphType.CAVEMAN, 
-                             GraphType.TREE, 
-                             GraphType.LADDER, 
-                             GraphType.LINE, 
-                             GraphType.STAR, 
-                             GraphType.CATERPILLAR, 
-                             GraphType.LOBSTER, 
-                             GraphType.TRIANGULAR, 
-                             GraphType.HEXAGONAL,
-                             GraphType.SQUARE_GRID,
-                             GraphType.KAGOME_LATTICE
+                             RandomType.ERDOS_RENYI, 
+                             RandomType.BARABASI_ALBERT, 
+                             RandomType.GRID, 
+                             RandomType.CAVEMAN, 
+                             RandomType.TREE, 
+                             RandomType.LADDER, 
+                             RandomType.LINE, 
+                             RandomType.STAR, 
+                             RandomType.CATERPILLAR, 
+                             RandomType.LOBSTER, 
                              ]):
         
-        adj_matrix, node_values, type = generate_graph(10, g_type, seed=i)
+        adj_matrix, node_values, type = init_random_graph(10, g_type, seed=i)
         
     print(adj_matrix)
     
