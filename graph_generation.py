@@ -15,7 +15,7 @@ import torch
 import matplotlib.pyplot as plt
 from torch_geometric.data import Data, Dataset, InMemoryDataset
 from torch_geometric.utils import coalesce, to_undirected, from_networkx
-
+from baselines.utils import plot_color_graph
 
 
 """
@@ -23,8 +23,6 @@ from torch_geometric.utils import coalesce, to_undirected, from_networkx
     Some of the graph are created using the NetworkX library, for more info see
     https://networkx.github.io/documentation/networkx-1.10/reference/generators.html
 """
-
-FILE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 class SyntheticDataset(InMemoryDataset):
@@ -55,8 +53,6 @@ class SyntheticDataset(InMemoryDataset):
         self.save([data], self.processed_paths[0])
 
 
-
-
 def erdos_renyi(N, degree, seed):
     """ Creates an Erdős-Rényi or binomial graph of size N with degree/N probability of edge creation """
     return nx.fast_gnp_random_graph(N, degree / N, seed, directed=False)
@@ -76,8 +72,7 @@ def grid(N):
         if N % i == 0:
             m = i
     G =  nx.grid_2d_graph(m, N // m)
-    pos = nx.get_node_attributes(G, 'pos')
-    return G, pos
+    return G
 
 
 def triangular(N):
@@ -87,8 +82,7 @@ def triangular(N):
         if N % i == 0:
             m = i
     G = nx.triangular_lattice_graph(m, N // m)
-    pos = nx.get_node_attributes(G, 'pos')
-    return G, pos
+    return G
 
 
 def hexagonal(N):
@@ -98,8 +92,7 @@ def hexagonal(N):
         if N % i == 0:
             m = i
     G = nx.hexagonal_lattice_graph(m, N // m)
-    pos = nx.get_node_attributes(G, 'pos')
-    return G, pos
+    return G
 
 
 def caveman(N):
@@ -130,6 +123,7 @@ def ladder(N):
 def line(N):
     """ Creates a graph composed of N nodes in a line """
     return nx.path_graph(N)
+
 
 def star(N):
     """ Creates a graph composed by one center node connected N-1 outer nodes """
@@ -206,7 +200,8 @@ def square_grid(M, N, seed) -> Tuple[nx.Graph, Dict[int, Tuple[float, float]]]:
     Description:
     -----------
         This function generates a square grid graph with m rows and n columns.
-        It assigns 'random edge weights' from Uniform distribution and optional node labels based on heterophily or homophily settings.
+        It assigns 'random edge weights' from Uniform distribution 
+        and optional node labels based on heterophily or homophily settings.
 
     """
     np.random.seed(seed)
@@ -241,56 +236,6 @@ def square_grid(M, N, seed) -> Tuple[nx.Graph, Dict[int, Tuple[float, float]]]:
     
     for node, position in pos.items():
         G.nodes[node]['pos'] = position
-    
-    return G, pos
-
-
-def create_kagome_lattice(m, n, seed):
-    """ Create a Kagome lattice and return its NetworkX graph and positions. """
-    np.random.seed(seed)
-    G = nx.Graph()
-    pos = {}
-    
-    def node_id(x, y, offset):
-        return 2 * (x * n + y) + offset
-    
-    for x in range(m):
-        for y in range(n):
-            # Two nodes per cell (offset 0 and 1)
-            current_id0 = node_id(x, y, 0)
-            current_id1 = node_id(x, y, 1)
-            pos[current_id0] = (y, x)
-            pos[current_id1] = (y + 0.5, x + 0.5)
-            
-            # Add nodes
-            G.add_node(current_id0)
-            G.add_node(current_id1)
-            
-            # Right and down connections
-            if y < n - 1:
-                right_id0 = node_id(x, y + 1, 0)
-                right_id1 = node_id(x, y + 1, 1)
-                G.add_edge(current_id0, right_id0)
-                G.add_edge(right_id1, right_id0)
-                G.add_edge(right_id0, current_id0)
-                G.add_edge(right_id0, right_id1)
-                
-            if x < m - 1:
-                down_id0 = node_id(x + 1, y, 0)
-                down_id1 = node_id(x + 1, y, 1)
-                G.add_edge(current_id0, down_id0)
-                G.add_edge(current_id1, down_id1)
-                G.add_edge(down_id0, current_id0)
-                G.add_edge(down_id1, current_id1)
-            
-            # Diagonal connections
-            if x < m - 1 and y < n - 1:
-                diag_id0 = node_id(x + 1, y + 1, 0)
-                diag_id1 = node_id(x + 1, y + 1, 1)
-                G.add_edge(current_id1, diag_id0)
-                G.add_edge(diag_id0, current_id1)
-                G.add_edge(current_id1, diag_id1)
-                G.add_edge(diag_id1, current_id1)
     
     return G, pos
 
@@ -340,6 +285,9 @@ class GraphType(Enum):
     LOBSTER = 11
     TRIANGULAR = 12
     HEXAGONAL = 13
+    SQUARE_GRID  = 14
+    KAGOME_LATTICE = 15
+
 
 # probabilities of each type in case of random type
 MIXTURE = [(GraphType.ERDOS_RENYI, 0.2), (GraphType.BARABASI_ALBERT, 0.2), (GraphType.GRID, 0.05),
@@ -349,6 +297,7 @@ MIXTURE = [(GraphType.ERDOS_RENYI, 0.2), (GraphType.BARABASI_ALBERT, 0.2), (Grap
 
 
 def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
+    # TODO seperate random graph with regular tilling graph
     """
     Generates graphs of different types of a given size. Note:
      - graph are undirected and without weights on edges for random types
@@ -399,6 +348,10 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
         G = lobster(N, seed)
     elif type == GraphType.SQUARE:
         G, pos = square_grid(N, N, seed)
+    elif type == GraphType.SQUARE_GRID:
+        G, pos = square_grid(2, N // 2, seed)
+    elif type == GraphType.KAGOME_LATTICE:
+        G, pos = create_kagome_lattice(2, N // 2, seed)
     else:
         raise ValueError("Graph type not recognized")
 
@@ -412,8 +365,12 @@ def generate_graph(N, type=GraphType.RANDOM, seed=None, degree=None):
         
     # draw the graph created
     plt.figure()
-    nx.draw(G, pos=nx.spring_layout(G))
-    plt.savefig('draw.png')
+    try:
+        plot = plot_color_graph(G, pos)
+    except:
+        plot = plot_color_graph(G)
+    # nx.draw(G, pos=nx.spring_layout(G))
+    plot.savefig('draw.png')
 
     return adj_matrix, node_values, type
 
@@ -452,7 +409,10 @@ if __name__ == '__main__':
                              GraphType.CATERPILLAR, 
                              GraphType.LOBSTER, 
                              GraphType.TRIANGULAR, 
-                             GraphType.HEXAGONAL]):
+                             GraphType.HEXAGONAL,
+                             GraphType.SQUARE_GRID,
+                             GraphType.KAGOME_LATTICE
+                             ]):
         
         adj_matrix, node_values, type = generate_graph(10, g_type, seed=i)
         

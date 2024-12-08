@@ -1,5 +1,6 @@
 import torch
-
+import os
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 import seaborn as sns
@@ -11,6 +12,11 @@ from torch_sparse import SparseTensor
 from torch_geometric.datasets import Planetoid
 from torch_geometric.utils import to_undirected, coalesce, remove_self_loops
 import torch_geometric.transforms as T
+import networkx as nx 
+from typing import Dict, List, Optional, Tuple, Any, Set
+
+
+FILE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 def calc_cn(ei: torch.Tensor, adj: 'scipy.sparse.csr_matrix', bs: int = 10000) -> torch.FloatTensor:
@@ -67,6 +73,7 @@ def plot_cn_dist(tr_cn: torch.FloatTensor, te_cn: torch.FloatTensor) -> None:
     plt.savefig(f'{FILE_PATH}/cn_dist.png')
 
 
+
 def plot_color_graph(G: nx.Graph, pos: Optional[Dict[int, Tuple[float, float]]] = None, 
                         title: str = "Graph", node_size: int = 300, with_labels: bool = True) -> Figure:
     """
@@ -106,7 +113,7 @@ def plot_color_graph(G: nx.Graph, pos: Optional[Dict[int, Tuple[float, float]]] 
     nx.draw(G, pos, with_labels=with_labels, node_size=node_size, node_color=node_color, 
             edge_color='gray', font_size=10)
     plt.title(title)
-    return plt.gcf()
+    return plt
 
 
 def plot_degree_histogram(G: nx.Graph) -> Figure:
