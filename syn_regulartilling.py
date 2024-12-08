@@ -14,7 +14,7 @@ from typing import *
 import torch
 import matplotlib.pyplot as plt
 from torch_geometric.data import Data, Dataset, InMemoryDataset
-from baselines.utils import plot_color_graph, plot_graph
+from trials.data_utils import plot_color_graph, plot_graph
 from syn_random import randomize
 import torch_geometric.transforms as T
 from torch_geometric.utils import (to_undirected, 

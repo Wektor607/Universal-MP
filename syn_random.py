@@ -16,10 +16,10 @@ import torch
 import matplotlib.pyplot as plt
 import torch_geometric.transforms as T
 from torch_geometric.data import Data, Dataset, InMemoryDataset
-from baselines.utils import plot_color_graph
+from trials.data_utils import plot_color_graph
 from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.utils import from_networkx, to_undirected, is_undirected
-from baselines.utils import plot_graph
+from trials.data_utils import plot_graph
 from torch_geometric.utils import (to_undirected, 
                                 coalesce, 
                                 remove_self_loops,
@@ -365,7 +365,6 @@ def init_pyg_random(N: int,
     data.adj_t = sp.csr_matrix((data.edge_weight.cpu(), (data.edge_index[0].cpu(), data.edge_index[1].cpu())), 
                 shape=(data.num_nodes, data.num_nodes))
 
-    # Splitting edges
     splits = random_edge_split(data,
                 undirected,
                 'cpu',

@@ -43,6 +43,7 @@ def calc_cn(ei: torch.Tensor, adj: 'scipy.sparse.csr_matrix', bs: int = 10000) -
     return torch.FloatTensor(sc)
 
 
+
 def plot_cn_dist(tr_cn: torch.FloatTensor, te_cn: torch.FloatTensor) -> None:
     """
     Generates a density plot of the number of common neighbors for training and testing datasets.
@@ -116,6 +117,7 @@ def plot_color_graph(G: nx.Graph, pos: Optional[Dict[int, Tuple[float, float]]] 
     return plt
 
 
+
 def plot_graph(G, pos=None, 
                title="Graph", 
                node_size=None, 
@@ -130,6 +132,7 @@ def plot_graph(G, pos=None,
             font_size=10)
     plt.title(title)
     return plt
+
 
 
 def plot_degree_histogram(G: nx.Graph) -> Figure:
@@ -183,6 +186,7 @@ def sort_edge_index(edge_index):
     return edge_reindex, sort_indices
 
 
+
 def randomsplit(data, val_ratio: float = 0.05, test_ratio: float = 0.15):
     data.edge_index, _ = coalesce(
         data.edge_index, None, num_nodes=data.num_nodes)
@@ -205,13 +209,30 @@ def randomsplit(data, val_ratio: float = 0.05, test_ratio: float = 0.15):
     splits['train'] = train_data
     splits['valid'] = val_data
     splits['test'] = test_data
-    for split_name, split in splits.items():
+    for _, split in splits.items():
         split['x'] = data.x
     del data, train_data, val_data, test_data
     return splits
 
 
+
+def load_synrandom(N: int, g_type: str, seed: int):
+    raise NotImplementedError
+    return 
+
+
+
+def load_regulartilling(N: int, g_type: str, seed: int):
+    raise NotImplementedError
+    return
+
+
+
 def loaddataset(name: str, nfeat_path=None):
+    # TODO double check 
+    #      1: 
+    #      2:
+    #      3:
     if name in ["Cora", "Citeseer", "Pubmed"]:
         dataset = Planetoid(root="dataset", name=name)
         data = dataset[0]
@@ -241,6 +262,7 @@ def loaddataset(name: str, nfeat_path=None):
         data.x = torch.load(nfeat_path, map_location="cpu")
     data.full_adj_t = data.adj_t
     return data, splits
+
 
 
 if __name__ == "__main__":

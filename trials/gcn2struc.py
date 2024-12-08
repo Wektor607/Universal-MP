@@ -18,14 +18,14 @@ from baselines.GNN import LinkPredictor
 from yacs.config import CfgNode as CN
 from baselines.LINKX import LINKX
 from baselines.GNN import Custom_GAT, Custom_GCN, GraphSAGE, Custom_GIN
-from baselines.utils import loaddataset
+from trials.data_utils import loaddataset
 from utils import save_to_csv, visualize
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch_sparse import SparseTensor
 from tqdm import tqdm 
-from utils import set_random_seeds, EarlyStopping
+from utils import EarlyStopping
 import argparse
 import wandb
 from typing import Dict, Any
