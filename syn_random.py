@@ -10,12 +10,17 @@ from enum import Enum
 import networkx as nx
 import os.path as osp
 import numpy as np
+import scipy.sparse as sp
 from typing import *
 import torch
 import matplotlib.pyplot as plt
+import torch_geometric.transforms as T
 from torch_geometric.data import Data, Dataset, InMemoryDataset
 from torch_geometric.utils import coalesce, to_undirected, from_networkx
 from baselines.utils import plot_color_graph
+from torch_geometric.transforms import RandomLinkSplit
+from torch_geometric.utils import from_networkx, to_undirected, is_undirected
+from baselines.utils import plot_graph
 
 
 """
@@ -34,16 +39,6 @@ def barabasi_albert(N, degree, seed):
     """ Creates a random graph according to the Barabási–Albert preferential attachment model
         of size N and where nodes are atteched with degree edges """
     return nx.barabasi_albert_graph(N, degree, seed)
-
-
-def grid(N):
-    """ Creates a m x k 2d grid graph with N = m*k and m and k as close as possible """
-    m = 1
-    for i in range(1, int(math.sqrt(N)) + 1):
-        if N % i == 0:
-            m = i
-    G =  nx.grid_2d_graph(m, N // m)
-    return G
 
 
 
@@ -112,9 +107,14 @@ def lobster(N, seed):
     return G
 
 
-def random_grid_graph(m, n):
+def random_grid_graph(N):
     """ Create a grid graph and return its NetworkX graph and positions. """
-    G = nx.grid_2d_graph(m, n)
+
+    m = 1
+    for i in range(1, int(math.sqrt(N)) + 1):
+        if N % i == 0:
+            m = i
+    G =  nx.grid_2d_graph(m, N // m)
     pos = {(x, y): (x, y) for x, y in G.nodes()}
     return G, pos
 
@@ -149,7 +149,9 @@ def randomize(A):
     return ans
 
 
-def init_nodefeats(self, G: nx.Graph) -> torch.Tensor:
+def init_nodefeats(G: nx.Graph,
+                   feature_type: str,
+                   emb_dim: int) -> torch.Tensor:
     """
     Input:
     ----------
@@ -167,11 +169,11 @@ def init_nodefeats(self, G: nx.Graph) -> torch.Tensor:
         The features can be 'random', 'one-hot', based on the node 'degree'.
     """
     num_nodes: int = len(G.nodes)
-    if self.feature_type == 'random':
-        nodefeats: torch.Tensor = torch.randn(num_nodes, self.emb_dim)
-    elif self.feature_type == 'one-hot':
+    if feature_type == 'random':
+        nodefeats: torch.Tensor = torch.randn(num_nodes, emb_dim)
+    elif feature_type == 'one-hot':
         nodefeats: torch.Tensor = torch.eye(num_nodes)
-    elif self.feature_type == 'degree':
+    elif feature_type == 'degree':
         degree: List[int] = [val for (_, val) in G.degree()]
         nodefeats: torch.Tensor = torch.tensor(degree, dtype=torch.float32).view(-1, 1)
         
@@ -192,7 +194,6 @@ class RandomType(Enum):
     LOBSTER = 10
 
 
-
 # probabilities of each type in case of random type
 MIXTURE = [(RandomType.ERDOS_RENYI, 0.2), (RandomType.BARABASI_ALBERT, 0.2), (RandomType.GRID, 0.05),
            (RandomType.CAVEMAN, 0.05), (RandomType.TREE, 0.15), (RandomType.LADDER, 0.05),
@@ -201,7 +202,7 @@ MIXTURE = [(RandomType.ERDOS_RENYI, 0.2), (RandomType.BARABASI_ALBERT, 0.2), (Ra
 
 
 def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
-    # TODO seperate random graph with regular tilling graph
+    
     """
     Generates graphs of different types of a given size. Note:
      - graph are undirected and without weights on edges for random types
@@ -231,7 +232,7 @@ def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
         if degree == None: degree = int(random.random() * (N - 1)) + 1
         G = barabasi_albert(N, degree, seed)
     elif type == RandomType.GRID:
-        G, pos = grid(N)
+        G, pos = random_grid_graph(N)
     elif type == RandomType.CAVEMAN:
         G = caveman(N)
     elif type == RandomType.TREE:
@@ -249,13 +250,7 @@ def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
     else:
         raise ValueError("Graph type not recognized")
 
-    # probabilities of each type in case of random type
-    MIXTURE = [(RandomType.ERDOS_RENYI, 0.2), (RandomType.BARABASI_ALBERT, 0.2), (RandomType.GRID, 0.05),
-            (RandomType.CAVEMAN, 0.05), (RandomType.TREE, 0.15), (RandomType.LADDER, 0.05),
-            (RandomType.LINE, 0.05), (RandomType.STAR, 0.05), (RandomType.CATERPILLAR, 0.1), (RandomType.LOBSTER, 0.1)]
-        
     # generate adjacency matrix and nodes values
-    # TREE, ERDOS_RENSI
     nodes = list(G)
     random.shuffle(nodes)
     adj_matrix = nx.to_numpy_array(G, nodes)
@@ -265,13 +260,13 @@ def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
     # draw the graph created
     plt.figure()
     try:
-        plot = plot_color_graph(G, pos)
+        plot = plot_graph(G, pos)
     except:
-        plot = plot_color_graph(G)
+        plot = plot_graph(G)
     # nx.draw(G, pos=nx.spring_layout(G))
     plot.savefig('draw.png')
-
-    return adj_matrix, node_values, type
+        
+    return G, adj_matrix, node_values, type
 
 
 class SyntheticDataset(InMemoryDataset):
@@ -285,7 +280,11 @@ class SyntheticDataset(InMemoryDataset):
         self.dataset_name = name
         N = N
         super().__init__(root, transform)
-        self.load(self.processed_paths[0])
+        try: 
+            self.load(self.processed_file_names[0])
+        except:
+            self.process()
+        
 
     @property
     def processed_dir(self) -> str:
@@ -299,27 +298,92 @@ class SyntheticDataset(InMemoryDataset):
         graph_type_str = f"RandomType.{self.dataset_name}"
         nx_data = init_random_graph(self.N, eval(graph_type_str), seed=0)
         data = from_networkx(nx_data)
-        self.save([data], self.processed_paths[0])
+        self.save([data], self.processed_file_names[0])
+
+
+def random_edge_split(data: Data,
+                undirected: bool,
+                device: Union[str, int],
+                val_pct: float,
+                test_pct: float,
+                split_labels: bool,
+                include_negatives: bool = False) -> Dict[str, Data]:
+
+    transform = T.Compose([
+        T.NormalizeFeatures(),
+        T.ToDevice(device),
+        RandomLinkSplit(is_undirected=undirected,
+                        num_val=val_pct,
+                        num_test=test_pct,
+                        add_negative_train_samples=include_negatives,
+                        split_labels=split_labels),
+
+    ])
+    train_data, val_data, test_data = transform(data)
+    del train_data.neg_edge_label, train_data.neg_edge_label_index
+    return {'train': train_data, 'valid': val_data, 'test': test_data}
+
+
+
+def init_pyg_random(N: int, 
+                    g_type: RandomType, 
+                    seed: int, 
+                    undirected = True, 
+                    val_pct = 0.15,
+                    test_pct = 0.05, 
+                    split_labels = True, 
+                    include_negatives = True) -> Data:
+    
+    G, _, _, _ = init_random_graph(N, g_type, seed=seed)
+
+    data: Data = from_networkx(G)
+    
+    data.x = init_nodefeats(G, 'random', int(np.log(N)) + 16)
+
+    data = T.ToSparseTensor()(data)
+    
+    row, col, _ = data.adj_t.coo()
+    data.edge_index = torch.stack([col, row], dim=0)
+
+    if  undirected:
+        data.edge_index = to_undirected(data.edge_index, data.edge_weight, reduce='add')[0]
+        data.edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
+
+    data.adj_t = sp.csr_matrix((data.edge_weight.cpu(), (data.edge_index[0].cpu(), data.edge_index[1].cpu())), 
+                shape=(data.num_nodes, data.num_nodes))
+
+    # Splitting edges
+    splits = random_edge_split(data,
+                undirected,
+                'cpu',
+                val_pct, # val_pct = 0.15
+                test_pct, # test_pct =  0.5,
+                split_labels, # split_labels = True,
+                include_negatives)  # include_negatives = False
+
+    # TODO save to .pt file
+    return data, splits
+
 
 
 if __name__ == '__main__':
     # TODO compare regular tilling with existiing graphs
     # params -> graph
     
-    # RANDOM = 0
-    # ERDOS_RENYI = 1
-    # BARABASI_ALBERT = 2
-    # GRID = 3
-    # SQUARE = 4
-    # CAVEMAN = 5
-    # TREE = 6
-    # LADDER = 7
-    # LINE = 8
-    # STAR = 9
-    # CATERPILLAR = 10
-    # LOBSTER = 11
-    # TRIANGULAR = 12
-    # HEXAGONAL = 13
+    RANDOM = 0
+    ERDOS_RENYI = 1
+    BARABASI_ALBERT = 2
+    GRID = 3
+    SQUARE = 4
+    CAVEMAN = 5
+    TREE = 6
+    LADDER = 7
+    LINE = 8
+    STAR = 9
+    CATERPILLAR = 10
+    LOBSTER = 11
+    TRIANGULAR = 12
+    HEXAGONAL = 13
     
     for i, g_type in enumerate([
                              RandomType.ERDOS_RENYI, 
@@ -334,10 +398,14 @@ if __name__ == '__main__':
                              RandomType.LOBSTER, 
                              ]):
         
-        adj_matrix, node_values, type = init_random_graph(10, g_type, seed=i)
+        # G, adj_matrix, node_values, type = init_random_graph(40, g_type, seed=i)
+        data, split = init_pyg_random(40, g_type, seed=i)
         
-    print(adj_matrix)
-    
+    # print(adj_matrix)
+    print(data.x)
+    print(data.edge_index)
+    print(split.keys())
+    print(split['train'])
     
     # graph -> split -> .pt 
     

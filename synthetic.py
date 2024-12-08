@@ -224,36 +224,7 @@ class SyntheticGraphGeneration:
                    test_pct: float,
                    split_labels: bool,
                    include_negatives: bool = False) -> Dict[str, Data]:
-        """
-        Input:
-        -----------
-        data : Data
-            The input graph data in the PyTorch Geometric format.
-        undirected : bool
-            Specifies whether the graph is undirected. If True, edges will be treated as bidirectional.
-        device : Union[str, int]
-            The device to which the data will be moved (e.g., 'cpu', 'cuda', or a specific GPU ID).
-        val_pct : float
-            The percentage of edges to be used for validation.
-        test_pct : float
-            The percentage of edges to be used for testing.
-        split_labels : bool
-            If True, includes the labels for split edges (positive and negative) in the returned datasets.
-        include_negatives : bool, default=False
-            If True, includes negative samples (non-existent edges) in the training data for better evaluation of link prediction.
 
-        Returns:
-        --------
-        Dict[str, Data]
-            A dictionary containing the split data:
-            - 'train': The training dataset.
-            - 'valid': The validation dataset.
-            - 'test': The test dataset.
-
-        Description:
-        ------------
-            This function splits the dataset edges into training, validation, and test sets.
-        """
         transform = T.Compose([
             T.NormalizeFeatures(),
             T.ToDevice(device),

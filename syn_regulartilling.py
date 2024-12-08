@@ -167,7 +167,6 @@ def init_regular_tilling(N, type=RegularTilling.SQUARE_GRID, seed=None):
     elif type == RegularTilling.KAGOME_LATTICE:
         G, pos = kagome_lattice(2, N // 2, seed)
 
-        
     # generate adjacency matrix and nodes values
     nodes = list(G)
     random.shuffle(nodes)
@@ -181,14 +180,12 @@ def init_regular_tilling(N, type=RegularTilling.SQUARE_GRID, seed=None):
         plot = plot_graph(G, pos, title = f'{type.name} Graph')
     except:
         plot = plot_graph(G)
-    # nx.draw(G, pos=nx.spring_layout(G))
+
     plot.savefig('draw.png')
 
     return adj_matrix, node_values, type
 
 if __name__ == '__main__':
-
-    
     for i, g_type in enumerate([
                              RegularTilling.TRIANGULAR, 
                              RegularTilling.HEXAGONAL, 
