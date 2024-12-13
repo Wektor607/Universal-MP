@@ -12,7 +12,7 @@ from functools import partial
 
 from node_label import de_plus_finder, NodeLabel
 from typing import Iterable, Final
-from torch_scatter import scatter_add
+
 
 class MLP(nn.Module):
     def __init__(
