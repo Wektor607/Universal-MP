@@ -272,36 +272,6 @@ def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
 
 
 
-class SyntheticDataset(InMemoryDataset):
-    def __init__(
-        self,
-        root: str,
-        name: str,
-        transform=None,
-        N: int=10000,
-    ):
-        self.dataset_name = name
-        N = N
-        super().__init__(root, transform)
-        try: 
-            self.load(self.processed_file_names[0])
-        except:
-            self.process()
-        
-
-    @property
-    def processed_dir(self) -> str:
-        return osp.join(self.root, self.__class__.__name__, 'processed')
-
-    @property
-    def processed_file_names(self) -> str:
-        return f'{self.dataset_name}_{self.N}.pt'
-
-    def process(self):
-        graph_type_str = f"RandomType.{self.dataset_name}"
-        nx_data = init_random_graph(self.N, eval(graph_type_str), seed=0)
-        data = from_networkx(nx_data)
-        self.save([data], self.processed_file_names[0])
 
 
 def random_edge_split(data: Data,

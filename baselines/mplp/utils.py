@@ -18,7 +18,7 @@ from torch_geometric.utils import (add_self_loops, degree,
                                    is_undirected, negative_sampling,
                                    to_undirected, train_test_split_edges, coalesce)
 from torch_sparse import SparseTensor    
-from snap_dataset import SNAPDataset
+# from snap_dataset import SNAPDataset
 from custom_dataset import SyntheticDataset
 from torch_geometric.data.collate import collate
 
@@ -83,9 +83,9 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
         'Computers': (datasets.Amazon, {'name':'Computers'}),
         'Photo': (datasets.Amazon, {'name':'Photo'}),
         'PolBlogs': (datasets.PolBlogs, {}),
-        'musae-twitch':(SNAPDataset, {'name':'musae-twitch'}),
-        'musae-github':(SNAPDataset, {'name':'musae-github'}),
-        'musae-facebook':(SNAPDataset, {'name':'musae-facebook'}),
+        # 'musae-twitch':(SNAPDataset, {'name':'musae-twitch'}),
+        # 'musae-github':(SNAPDataset, {'name':'musae-github'}),
+        # 'musae-facebook':(SNAPDataset, {'name':'musae-facebook'}),
         'syn-TRIANGULAR':(SyntheticDataset, {'name':'TRIANGULAR'}),
         'syn-GRID':(SyntheticDataset, {'name':'GRID'}),
     }

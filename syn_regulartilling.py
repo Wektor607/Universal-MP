@@ -37,7 +37,7 @@ class RegularTilling(Enum):
     HEXAGONAL = 2
     SQUARE_GRID  = 3
     KAGOME_LATTICE = 4
-    
+     
     
 def triangular(N):
     """ Creates a m x k 2d grid triangular graph with N = m*k and m and k as close as possible """
