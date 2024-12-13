@@ -269,11 +269,6 @@ def init_random_graph(N, type=RandomType.RANDOM, seed=None, degree=None):
     return G, adj_matrix, node_values, type
 
 
-
-
-
-
-
 def random_edge_split(data: Data,
                 undirected: bool,
                 device: Union[str, int],
@@ -325,8 +320,6 @@ def init_pyg_random(N: int,
     data.edge_index, _ = coalesce(data.edge_index, None, num_nodes=data.num_nodes)
     data.edge_index, _ = remove_self_loops(data.edge_index)
     
-    if undirected:
-        data = to_undirected(data)
         
     if  undirected:
         data.edge_index = to_undirected(data.edge_index, data.edge_weight, reduce='add')[0]
