@@ -27,10 +27,10 @@ MPLP_dict={
 def main():
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')
     # dataset setting
-    parser.add_argument('--dataset', type=str, default='collab')
+    parser.add_argument('--dataset', type=str, default='syn-GRID') #  'syn-GRID', 'syn-TRIANGULAR', 'ogbl-collab'
     parser.add_argument('--val_ratio', type=float, default=0.1)
     parser.add_argument('--test_ratio', type=float, default=0.2)
-    parser.add_argument('--dataset_dir', type=str, default='./data')
+    parser.add_argument('--dataset_dir', type=str, default='/hkfs/work/workspace/scratch/cc7738-rebuttal/Universal-MP/baselines/mplp/data')
     parser.add_argument('--use_valedges_as_input', type=str2bool, default='False', help='whether to use val edges as input')
     parser.add_argument('--year', type=int, default=-1)
 

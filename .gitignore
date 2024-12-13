@@ -6,3 +6,5 @@ dataset/
 trials/log/
 trials/error/
 *.png
+
+baselines/mplp/data
