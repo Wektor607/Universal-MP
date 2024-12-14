@@ -13,9 +13,7 @@ import numpy as np
 from typing import *
 import torch
 import matplotlib.pyplot as plt
-from torch_geometric.data import Data, Dataset, InMemoryDataset
-from trials.data_utils import plot_color_graph, plot_graph
-from syn_random import randomize
+from torch_geometric.data import Data
 import torch_geometric.transforms as T
 from torch_geometric.utils import (to_undirected, 
                                 coalesce, 
@@ -23,6 +21,7 @@ from torch_geometric.utils import (to_undirected,
                                 from_networkx)
 import scipy.sparse as sp
 from syn_random import init_nodefeats, random_edge_split
+from data_utils import plot_graph
 
 """
     Generates random graphs of different types of a given size.
@@ -38,6 +37,7 @@ class RegularTilling(Enum):
     SQUARE_GRID  = 3
     KAGOME_LATTICE = 4
      
+    
     
 def triangular(N):
     """ Creates a m x k 2d grid triangular graph with N = m*k and m and k as close as possible """

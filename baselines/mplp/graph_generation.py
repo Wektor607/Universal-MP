@@ -85,7 +85,10 @@ def caveman(N):
 
 def tree(N, seed):
     """ Creates a tree of size N with a power law degree distribution """
-    return nx.random_powerlaw_tree(N, seed=seed, tries=10000)
+    if N < 101:
+        return nx.random_powerlaw_tree(N, seed=seed, gamma=3, tries=10000)
+    else:
+        return nx.random_powerlaw_tree(100, seed=seed, tries=10000)
 
 
 def ladder(N):

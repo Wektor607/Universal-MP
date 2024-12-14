@@ -99,8 +99,13 @@ def test_hits(encoder, predictor, data, split_edge, evaluator,
     adj_t = data.adj_t
     h = encoder(data.x, adj_t)
 
+    num_neg = 1
+    neg_edge_epoch = negative_sampling(data.edge_index, num_nodes=data.adj_t.size(0),
+                                        num_neg_samples=(data.adj_t.nnz()//2)*num_neg)
+    
     def test_split(split, cache_mode=None):
         pos_test_edge = split_edge[split]['edge'].to(device)
+        split_edge[split]['edge_neg'] = neg_edge_epoch
         neg_test_edge = split_edge[split]['edge_neg'].to(device)
 
         pos_test_preds = []

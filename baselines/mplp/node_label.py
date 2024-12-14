@@ -398,7 +398,9 @@ class NodeLabel(torch.nn.Module):
         return count_1_1, count_1_2, count_2_1, count_2_2, count_self_1_2, count_self_2_1, degree_u, degree_v
 
 def subgraph(edges: Tensor, adj_t: SparseTensor, k: int=2):
-    row,col = edges
+    if edges.shape[0] > edges.shape[1]:
+        edges = edges.t()   
+    row, col = edges
     nodes = torch.cat((row,col),dim=-1)
     edge_index,_ = to_edge_index(adj_t)
     subset, new_edge_index, inv, edge_mask = pyg_k_hop_subgraph(nodes, k, edge_index=edge_index, 

@@ -19,8 +19,10 @@ from torch_geometric.utils import (add_self_loops, degree,
                                    to_undirected, train_test_split_edges, coalesce)
 from torch_sparse import SparseTensor    
 from snap_dataset import SNAPDataset
-from custom_dataset import SyntheticDataset
+from custom_dataset import SyntheticRandom, SyntheticRegularTilling, SyntheticDataset
+
 from torch_geometric.data.collate import collate
+
 
 def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
     if name.startswith('ogbl-'):
@@ -86,8 +88,21 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
         'musae-twitch':(SNAPDataset, {'name':'musae-twitch'}),
         'musae-github':(SNAPDataset, {'name':'musae-github'}),
         'musae-facebook':(SNAPDataset, {'name':'musae-facebook'}),
+        
+        
+        'random-ERDOS_RENYI':(SyntheticRandom, {'name':'ERDOS_RENYI'}),
+        'random-Tree': (SyntheticRandom, { 'name':'TREE'}),
+        'random-Grid': (SyntheticRandom, { 'name':'GRID'}),
+        'random-BA': (SyntheticRandom, { 'name':'BARABASI_ALBERT'}),
+
+        'regulartilling-TRIANGULAR':(SyntheticRegularTilling, {'name':'TRIANGULAR'}),
+        'regulartilling-HEXAGONAL':(SyntheticRegularTilling, {'name':'HEXAGONAL'}),
+        'regularTilling-SQUARE_GRID':(SyntheticRegularTilling, {'name':'SQUARE_GRID'}),
+        
+        
         'syn-TRIANGULAR':(SyntheticDataset, {'name':'TRIANGULAR'}),
         'syn-GRID':(SyntheticDataset, {'name':'GRID'}),
+        
     }
     # assert name in pyg_dataset_dict, "Dataset must be in {}".format(list(pyg_dataset_dict.keys()))
 
@@ -176,7 +191,7 @@ def get_data_split(root, name: str, val_ratio, test_ratio, run=0):
     print(f"{split_edge['train']['edge'][:10,:]}")
     print(f"valid: {split_edge['valid']['edge'].shape[0]}")
     print(f"test: {split_edge['test']['edge'].shape[0]}")
-    print(f"max_degree:{degree(data.edge_index[0], data.num_nodes).max()}")
+    # print(f"max_degree:{degree(data.edge_index[0], data.num_nodes).max()}")
     return data, split_edge
 
 

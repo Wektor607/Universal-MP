@@ -27,7 +27,7 @@ MPLP_dict={
 def main():
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')
     # dataset setting
-    parser.add_argument('--dataset', type=str, default='syn-GRID') #  'syn-GRID', 'syn-TRIANGULAR', 'ogbl-collab'
+    parser.add_argument('--dataset', type=str, default='random-Grid') #  'syn-GRID', 'syn-TRIANGULAR', 'ogbl-collab', 'random-Grid'
     parser.add_argument('--val_ratio', type=float, default=0.1)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--dataset_dir', type=str, default='/hkfs/work/workspace/scratch/cc7738-rebuttal/Universal-MP/baselines/mplp/data')

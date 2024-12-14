@@ -15,16 +15,13 @@ from typing import *
 import torch
 import matplotlib.pyplot as plt
 import torch_geometric.transforms as T
-from torch_geometric.data import Data, Dataset, InMemoryDataset
-from trials.data_utils import plot_color_graph
+from torch_geometric.data import Data
 from torch_geometric.transforms import RandomLinkSplit
-from torch_geometric.utils import from_networkx, to_undirected, is_undirected
-from trials.data_utils import plot_graph
 from torch_geometric.utils import (to_undirected, 
                                 coalesce, 
                                 remove_self_loops,
                                 from_networkx)
-
+from data_utils import plot_graph
 """
     Generates random graphs of different types of a given size.
     Some of the graph are created using the NetworkX library, for more info see
@@ -320,7 +317,6 @@ def init_pyg_random(N: int,
     data.edge_index, _ = coalesce(data.edge_index, None, num_nodes=data.num_nodes)
     data.edge_index, _ = remove_self_loops(data.edge_index)
     
-        
     if  undirected:
         data.edge_index = to_undirected(data.edge_index, data.edge_weight, reduce='add')[0]
         data.edge_weight = torch.ones(data.edge_index.size(1), dtype=float)
