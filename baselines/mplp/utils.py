@@ -33,12 +33,11 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
             NeuralNeighborCompletion just set edge_weight=None
             ELPH use edge_weight
         """
-
         split_edge = dataset.get_edge_split()
         if name == 'ogbl-collab' and year > 0:  # filter out training edges before args.year
             data, split_edge = filter_by_year(data, split_edge, year)
         if name == 'ogbl-vessel':
-            # normalize x,y,z coordinates  
+            # normalize x, y, z coordinates  
             data.x[:, 0] = torch.nn.functional.normalize(data.x[:, 0], dim=0)
             data.x[:, 1] = torch.nn.functional.normalize(data.x[:, 1], dim=0)
             data.x[:, 2] = torch.nn.functional.normalize(data.x[:, 2], dim=0)
@@ -58,6 +57,7 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
         print(f"valid: {split_edge['valid'][key].shape[0]}")
         print(f"test: {split_edge['test'][key].shape[0]}")
         print(f"max_degree:{degree(data.edge_index[0], data.num_nodes).max()}")
+        
         data = ToSparseTensor(remove_edge_index=False)(data)
         data.adj_t = data.adj_t.to_symmetric()
         # Use training + validation edges for inference on test set.
@@ -72,8 +72,8 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
         # make node feature as float
         if data.x is not None:
             data.x = data.x.to(torch.float)
-        if name != 'ogbl-ddi':
-            del data.edge_index
+        # if name != 'ogbl-ddi':
+            # del data.edge_index
         return data, split_edge
 
     pyg_dataset_dict = {
@@ -89,7 +89,6 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
         'musae-github':(SNAPDataset, {'name':'musae-github'}),
         'musae-facebook':(SNAPDataset, {'name':'musae-facebook'}),
         
-        
         'random-ERDOS_RENYI':(SyntheticRandom, {'name':'ERDOS_RENYI'}),
         'random-Tree': (SyntheticRandom, { 'name':'TREE'}),
         'random-Grid': (SyntheticRandom, { 'name':'GRID'}),
@@ -99,12 +98,10 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
         'regulartilling-HEXAGONAL':(SyntheticRegularTilling, {'name':'HEXAGONAL'}),
         'regularTilling-SQUARE_GRID':(SyntheticRegularTilling, {'name':'SQUARE_GRID'}),
         
-        
         'syn-TRIANGULAR':(SyntheticDataset, {'name':'TRIANGULAR'}),
         'syn-GRID':(SyntheticDataset, {'name':'GRID'}),
         
     }
-    # assert name in pyg_dataset_dict, "Dataset must be in {}".format(list(pyg_dataset_dict.keys()))
 
     if name in pyg_dataset_dict:
         dataset_class, kwargs = pyg_dataset_dict[name]
@@ -118,6 +115,8 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
     else:
         data = load_unsplitted_data(root, name)
     return data, None
+
+
 
 def load_unsplitted_data(root,name):
     # read .mat format files
@@ -295,4 +294,14 @@ def filter_by_year(data, split_edge, year):
 
 def get_git_revision_short_hash() -> str:
     return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
-    
+
+
+if __name__ == '__main__':
+    dataset = 'ogbl-collab'
+    dataset_dir = '/hkfs/work/workspace/scratch/cc7738-rebuttal/Universal-MP/baselines/mplp/data'
+
+    data, split_edge = get_data_split(dataset_dir, 'ogbl-collab', 0.15, 0.05, run=0)
+    data, split_edge = get_data_split(dataset_dir, 'ogbl-vessel', 0.15, 0.05, run=0)
+    data, split_edge = get_data_split(dataset_dir, 'ogbl-ppa', 0.15, 0.05, run=0)
+    data, split_edge = get_data_split(dataset_dir, 'ogbl-ddi', 0.15, 0.05, run=0)
+    data, split_edge = get_data_split(dataset_dir, 'ogbl-citation2', 0.15, 0.05, run=0)

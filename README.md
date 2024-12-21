@@ -24,7 +24,8 @@ pip install -r requirements.txt
     - [ ] transfer MPLP, SEAL
     - [ ] present label trick
     - [ ] fast conclusion of the best architecture and useful design 
-    - [ ] recheck dataloader, data split rate, 
+    - [ ] recheck dataloader, data split rate, document data preprocessing step and re-evaluate mplp 
+    - [ ] present GAE-Refine, MPLP
 - [german] submodule ogb, cora, tag and non-attribute graph
 
 ## Usage

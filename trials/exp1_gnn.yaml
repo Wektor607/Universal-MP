@@ -67,6 +67,16 @@ model:
     num_edge_layers: 1         
     num_node_layers: 1       
 
+  HLGNN:
+    in_channels: None
+    hidden_channels: 256
+    out_channels: 256
+    num_layers: 15
+    dropout: 0.3
+    emb: False
+    init: 'KI'
+    alpha: 0.5
+
 score:
   type: LinkPredictor
 
@@ -122,6 +132,18 @@ score:
   LINKX:
     score_in_channels: 64
     score_hidden_channels: 64
+    score_num_layers_predictor: 3
+    score_dropout: 0.1
+    score_out_channels: 1
+    score_gin_mlp_layer: 2
+    score_cat_node_feat_mf: False
+    score_cat_n2v_feat: False
+    score_num_layers: 2
+    product: dot
+
+  HLGNN:
+    score_in_channels: 256
+    score_hidden_channels: 256
     score_num_layers_predictor: 3
     score_dropout: 0.1
     score_out_channels: 1

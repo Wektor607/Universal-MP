@@ -8,6 +8,8 @@ import torch.nn.functional as F
 import time
 from yacs.config import CfgNode
 from pprint import pprint 
+import numpy as np
+import random
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -30,6 +32,7 @@ import argparse
 import wandb
 from typing import Dict, Any
 import pickle
+from baselines.HLGNN import HLGNN
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -137,7 +140,7 @@ def valid_cn(encoder, predictor, data, splits, batch_size, device):
         
         edge = pos_valid_edge[:, perm]
         
-        h = encoder(data.x, data.full_adj_t)
+        h = encoder(data.x, data.full_adj_t, data.edge_weight)
         neg_edge = neg_valid_edge[:, perm]
         
         pos_pred = predictor(h, edge).squeeze()
@@ -178,7 +181,8 @@ def train_cn(encoder, predictor, optimizer, data, split_edge, batch_size, mask_t
             adj_t = data.adj_t
         
         adj_t = adj_t.to(device)
-        h = encoder(data.x, adj_t)
+        # h = encoder(data.x, adj_t)
+        h = encoder(data.x, data.adj_t, data.edge_weight)
         neg_edge = neg_edge_epoch[:, perm]
         
         pos_pred = predictor(h, edge).squeeze()
@@ -269,6 +273,19 @@ def experiment_loop(args: argparse.Namespace,
                               cfg_encoder.mlp_layer
                               )
         
+    if args.model == 'HLGNN':
+        encoder = HLGNN(cfg_encoder.in_channels,
+                        hidden_channels=256,
+                        out_channels=256,
+                        K=3,
+                        dropout=0.3,
+                        alpha=0.5, 
+                        init='KI'
+                        )
+        
+        cfg_decoder.out_channels = 256
+        cfg_decoder.score_hidden_channels = 256
+        
     decoder = LinkPredictor(cfg_encoder.out_channels,
                 cfg_decoder.score_hidden_channels,
                 cfg_decoder.score_out_channels,
@@ -321,9 +338,9 @@ def parse_args():
     # Training parameters 
     parser.add_argument('--epochs', type=int, default=1, help="Number of training epochs.")
     parser.add_argument('--dataset', type=str, default="Cora", help="Dataset to use.")
-    parser.add_argument('--batch_size', type=int, default=2**10, help="Batch size for training.")
+    parser.add_argument('--batch_size', type=int, default=2**12, help="Batch size for training.")
     parser.add_argument('--h_key', type=str, default="CN", help="Heuristic key to use.")
-    parser.add_argument('--model', type=str, default="Custom_GAT", 
+    parser.add_argument('--model', type=str, default="HLGNN", 
                         choices = ["LINKX", "Custom_GAT", "Custom_GCN", "GraphSAGE", "Custom_GIN"], 
                         help="Model type to use.")
     parser.add_argument('--nodefeat', type=str, default="adjacency", 
@@ -333,9 +350,9 @@ def parse_args():
     parser.add_argument('--use_early_stopping', action='store_true', help="Enable early stopping.")
 
     # Optimizer parameters
-    parser.add_argument('--lr', type=float, default=0.001, help="Learning rate.")
+    parser.add_argument('--lr', type=float, default=0.01, help="Learning rate.")
     parser.add_argument('--weight_decay', type=float, default=0, help="Weight decay for optimizer.")
-    parser.add_argument('--generate_dataset', type=bool, default=False, help="enable generate dand save dataset.")
+    parser.add_argument('--generate_dataset', type=bool, default=True, help="enable generate dand save dataset.")
     
     return parser.parse_args()
 
@@ -392,7 +409,13 @@ if __name__ == "__main__":
     
     
     for i in range(NUM_SEED):
-        set_random_seeds(i) 
+        torch.manual_seed(i)
+        torch.cuda.manual_seed_all(i)
+        # torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.benchmark = False
+        np.random.seed(i)
+        random.seed(i)
+
 
         if args.nodefeat == 'one-hot':
             data.x = torch.eye(data.num_nodes, data.num_nodes).to(device)
