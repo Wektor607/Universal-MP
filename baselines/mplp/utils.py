@@ -47,6 +47,7 @@ def get_dataset(root, name: str, use_valedges_as_input=False, year=-1):
             # double the edge weight. temporary fix like this to avoid too dense graph.
             if name == "ogbl-collab":
                 data.edge_weight = data.edge_weight/2
+        
         if 'edge' in split_edge['train']:
             key = 'edge'
         else:
@@ -143,11 +144,14 @@ def set_random_seeds(random_seed=0):
 
 # random split dataset
 def randomsplit(data, val_ratio: float=0.10, test_ratio: float=0.2):
+    # difference with coleasce
+    
     def removerepeated(ei):
         ei = to_undirected(ei)
         ei = ei[:, ei[0]<ei[1]]
         return ei
 
+    # change to random split func
     data = train_test_split_edges(data, test_ratio, test_ratio)
     split_edge = {'train': {}, 'valid': {}, 'test': {}}
     num_val = int(data.val_pos_edge_index.shape[1] * val_ratio/test_ratio)
