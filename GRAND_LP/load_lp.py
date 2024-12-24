@@ -21,6 +21,8 @@ from hyperbolic_distances import hyperbolize
 from torch_geometric.transforms import GDC
 from torch_geometric.utils import add_self_loops, is_undirected, to_dense_adj, \
   dense_to_sparse, to_undirected
+import torch_geometric.transforms as T
+from typing import Dict, Tuple, List, Union
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -33,9 +35,15 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
             NeuralNeighborCompletion just set edge_weight=None
             ELPH use edge_weight
         """
+        
+        split_edge = get_edge_split(data,
+                                True,
+                                opt['device'],
+                                0.15,#opt.split_index[1],
+                                0.05,#opt.split_index[2],
+                                True,#opt.include_negatives,
+                                True)#opt.split_labels)
 
-        split_edge = dataset.get_edge_split()
-        print(year)
         if name == 'ogbl-collab' and year > 0:  # filter out training edges before args.year
             data, split_edge = filter_by_year(data, split_edge, year)
         if name == 'ogbl-vessel':
@@ -49,8 +57,9 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
             # double the edge weight. temporary fix like this to avoid too dense graph.
             if name == "ogbl-collab":
                 data.edge_weight = data.edge_weight/2
-        if 'edge' in split_edge['train']:
-            key = 'edge'
+                
+        if 'edge_index' in split_edge['train']:
+            key = 'edge_index'
         else:
             key = 'source_node'
         print("-"*20)
@@ -63,7 +72,7 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
         data.adj_t = data.adj_t.to_symmetric()
         # Use training + validation edges for inference on test set.
         if use_valedges_as_input:
-            val_edge_index = split_edge['valid']['edge'].t()
+            val_edge_index = split_edge['valid']['edge_index'].t()
             full_edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
             data.full_adj_t = SparseTensor.from_edge_index(full_edge_index, 
                                                     sparse_sizes=(data.num_nodes, data.num_nodes)).coalesce()
@@ -78,9 +87,10 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
         # make node feature as float
         if data.x is not None:
             data.x = data.x.to(torch.float)
-        
-        if name != 'ogbl-ddi':
-            del data.edge_index
+            
+        # I comment it, because we need it for models
+        # if name != 'ogbl-ddi':
+        #     del data.edge_index
     
         return data, split_edge
 
@@ -117,6 +127,29 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
         data = rewire(data, opt, root)
     
     return data, None
+
+def get_edge_split(data: Data,
+                   undirected: bool,
+                   device: Union[str, int],
+                   val_pct: float,
+                   test_pct: float,
+                   include_negatives: bool,
+                   split_labels: bool):
+    transform = T.Compose([
+        T.NormalizeFeatures(),
+        T.ToDevice(device),
+        RandomLinkSplit(is_undirected=undirected,
+                        num_val=val_pct,
+                        num_test=test_pct,
+                        add_negative_train_samples=include_negatives,
+                        split_labels=split_labels),
+
+    ])
+    del data.adj_t, data.e_id, data.batch_size, data.n_asin, data.n_id
+    print(data)
+
+    train_data, val_data, test_data = transform(data)
+    return {'train': train_data, 'valid': val_data, 'test': test_data}
 
 def filter_by_year(data, split_edge, year):
     """
@@ -206,7 +239,7 @@ def rewire(data, opt, data_dir):
         data = get_two_hop(data)
     elif rw == 'gdc':
         data = apply_gdc(data, opt)
-    # Didn't work
+    # Didn't works
     elif rw == 'pos_enc_knn':
         data = apply_pos_dist_rewire(data, opt, data_dir)
     return data

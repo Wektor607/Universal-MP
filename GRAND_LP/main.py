@@ -1,8 +1,19 @@
 
 import argparse
 import torch
+import time
 
 from load_lp import *
+from metrics import *
+from graph_rewiring import apply_KNN
+from base_classes import LinkPredictor
+from GNN_KNN import GNN_KNN
+from GNN_KNN_early import GNNKNNEarly
+from GNN import GNN
+from GNN_early import GNNEarly
+from ogb.nodeproppred import Evaluator
+from torch.utils.data import DataLoader
+
 # I copied the best parameters for the rest of the data sets from ogbn-arxiv
 best_params_dict = {'Cora': {'M_nodes': 64, 'adaptive': False, 'add_source': True, 'adjoint': False, 'adjoint_method': 'adaptive_heun', 'adjoint_step_size': 1, 'alpha': 1.0, 'alpha_dim': 'sc', 'att_samp_pct': 1, 'attention_dim': 128, 'attention_norm_idx': 1, 'attention_rewiring': False, 'attention_type': 'scaled_dot', 'augment': False, 'baseline': False, 'batch_norm': False, 'beltrami': False, 'beta_dim': 'sc', 'block': 'attention', 'cpus': 1, 'data_norm': 'rw', 'dataset': 'Cora', 'decay': 0.00507685443154266, 'directional_penalty': None, 'dropout': 0.046878964627763316, 'dt': 0.001, 'dt_min': 1e-05, 'epoch': 100, 'exact': True, 'fc_out': False, 'feat_hidden_dim': 64, 'function': 'laplacian', 'gdc_avg_degree': 64, 'gdc_k': 64, 'gdc_method': 'ppr', 'gdc_sparsification': 'topk', 'gdc_threshold': 0.01, 'gpus': 0.5, 'grace_period': 20, 'heads': 8, 'heat_time': 3.0, 'hidden_dim': 80, 'input_dropout': 0.5, 'jacobian_norm2': None, 'kinetic_energy': None, 'label_rate': 0.5, 'leaky_relu_slope': 0.2, 'lr': 0.022924849756740397, 'max_epochs': 1000, 'max_iters': 100, 'max_nfe': 2000, 'method': 'dopri5', 'metric': 'accuracy', 'mix_features': False, 'name': 'cora_beltrami_splits', 'new_edges': 'random', 'no_alpha_sigmoid': False, 'not_lcc': True, 'num_init': 1, 'num_samples': 1000, 'num_splits': 2, 'ode_blocks': 1, 'optimizer': 'adamax', 'patience': 100, 'pos_enc_hidden_dim': 16, 'pos_enc_orientation': 'row', 'pos_enc_type': 'GDC', 'ppr_alpha': 0.05, 'reduction_factor': 10, 'regularise': False, 'reweight_attention': False, 'rewire_KNN': False, 'rewire_KNN_T': 'T0', 'rewire_KNN_epoch': 10, 'rewire_KNN_k': 64, 'rewire_KNN_sym': False, 'rewiring': None, 'rw_addD': 0.02, 'rw_rmvR': 0.02, 'self_loop_weight': 1, 'sparsify': 'S_hat', 'square_plus': True, 'step_size': 1, 'threshold_type': 'addD_rvR', 'time': 18.294754260552843, 'tol_scale': 821.9773048827274, 'tol_scale_adjoint': 1.0, 'total_deriv': None, 'use_cora_defaults': False, 'use_flux': False, 'use_labels': False, 'use_lcc': True, 'use_mlp': False},
                     'Citeseer': {'M_nodes': 64, 'adaptive': False, 'add_source': True, 'adjoint': False, 'adjoint_method': 'adaptive_heun', 'adjoint_step_size': 1, 'alpha': 1.0, 'alpha_dim': 'sc', 'att_samp_pct': 1, 'attention_dim': 32, 'attention_norm_idx': 1, 'attention_rewiring': False, 'attention_type': 'exp_kernel', 'augment': False, 'baseline': False, 'batch_norm': False, 'beltrami': False, 'beta_dim': 'sc', 'block': 'attention', 'cpus': 1, 'data_norm': 'rw', 'dataset': 'Citeseer', 'decay': 0.1, 'directional_penalty': None, 'dropout': 0.7488085003122172, 'dt': 0.001, 'dt_min': 1e-05, 'epoch': 250, 'exact': True, 'fc_out': False, 'feat_hidden_dim': 64, 'function': 'laplacian', 'gdc_avg_degree': 64, 'gdc_k': 128, 'gdc_method': 'ppr', 'gdc_sparsification': 'topk', 'gdc_threshold': 0.01, 'gpus': 1.0, 'grace_period': 20, 'heads': 8, 'heat_time': 3.0, 'hidden_dim': 80, 'input_dropout': 0.6803233752085334, 'jacobian_norm2': None, 'kinetic_energy': None, 'label_rate': 0.5, 'leaky_relu_slope': 0.5825086997804176, 'lr': 0.00863585231323069, 'max_epochs': 1000, 'max_iters': 100, 'max_nfe': 3000, 'method': 'dopri5', 'metric': 'accuracy', 'mix_features': False, 'name': 'Citeseer_beltrami_1_KNN', 'new_edges': 'random', 'no_alpha_sigmoid': False, 'not_lcc': True, 'num_class': 6, 'num_feature': 3703, 'num_init': 2, 'num_nodes': 2120, 'num_samples': 400, 'num_splits': 1, 'ode_blocks': 1, 'optimizer': 'adam', 'patience': 100, 'pos_enc_dim': 'row', 'pos_enc_hidden_dim': 16, 'ppr_alpha': 0.05, 'reduction_factor': 4, 'regularise': False, 'reweight_attention': False, 'rewire_KNN': False, 'rewire_KNN_epoch': 10, 'rewire_KNN_k': 64, 'rewire_KNN_sym': False, 'rewiring': None, 'rw_addD': 0.02, 'rw_rmvR': 0.02, 'self_loop_weight': 1, 'sparsify': 'S_hat', 'square_plus': True, 'step_size': 1, 'threshold_type': 'addD_rvR', 'time': 7.874113442879092, 'tol_scale': 2.9010446330432815, 'tol_scale_adjoint': 1.0, 'total_deriv': None, 'use_cora_defaults': False, 'use_flux': False, 'use_labels': False, 'use_lcc': True, 'use_mlp': False},
@@ -47,6 +58,125 @@ def merge_cmd_args(cmd_opt, opt):
     opt['not_lcc'] = False
   if cmd_opt['num_splits'] != 1:
     opt['num_splits'] = cmd_opt['num_splits']
+
+def get_optimizer(name, parameters, lr, weight_decay=0):
+  if name == 'sgd':
+    return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay)
+  elif name == 'rmsprop':
+    return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay)
+  elif name == 'adagrad':
+    return torch.optim.Adagrad(parameters, lr=lr, weight_decay=weight_decay)
+  elif name == 'adam':
+    return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
+  elif name == 'adamax':
+    return torch.optim.Adamax(parameters, lr=lr, weight_decay=weight_decay)
+  else:
+    raise Exception("Unsupported optimizer: {}".format(name))
+
+def print_model_params(model):
+  print(model)
+  for name, param in model.named_parameters():
+    if param.requires_grad:
+      print(name)
+      print(param.data.shape)
+      
+@torch.no_grad()
+def test_OGB(model, data, pos_encoding, opt, splits, predictor, batch_size):
+  if opt['dataset'] == 'ogbn-arxiv':
+    name = 'ogbn-arxiv'
+  elif opt['dataset'] == 'ogbl-collab':
+    name = 'ogbl-collab'
+
+  evaluator = Evaluator(name=name)
+  model.eval()
+  h = model(data.x, pos_encoding)
+  
+  pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
+  pos_valid_edge = splits['valid']['pos_edge_label_index'].to(data.x.device)
+  neg_valid_edge = splits['valid']['neg_edge_label_index'].to(data.x.device)
+  pos_test_edge = splits['test']['pos_edge_label_index'].to(data.x.device)
+  neg_test_edge = splits['test']['neg_edge_label_index'].to(data.x.device)
+  
+  pos_train_preds = []
+  for perm in DataLoader(range(pos_train_edge.size(0)), batch_size):
+      edge = pos_train_edge[perm].t()
+      pos_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+  pos_train_pred = torch.cat(pos_train_preds, dim=0)
+
+  pos_valid_preds = []
+  for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
+      edge = pos_valid_edge[perm].t()
+      pos_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+  pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
+
+  neg_valid_preds = []
+  for perm in DataLoader(range(neg_valid_edge.size(0)), batch_size):
+      edge = neg_valid_edge[perm].t()
+      neg_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+  neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
+
+  pos_test_preds = []
+  for perm in DataLoader(range(pos_test_edge.size(0)), batch_size):
+      edge = pos_test_edge[perm].t()
+      pos_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+  pos_test_pred = torch.cat(pos_test_preds, dim=0)
+
+  neg_test_preds = []
+  for perm in DataLoader(range(neg_test_edge.size(0)), batch_size):
+      edge = neg_test_edge[perm].t()
+      neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+  neg_test_pred = torch.cat(neg_test_preds, dim=0)
+
+  results = {}
+  for K in [1, 3, 10, 20, 50, 100]:
+      evaluator.K = K
+      train_hits = evaluator.eval({
+          'y_pred_pos': pos_train_pred,
+          'y_pred_neg': neg_valid_pred,
+      })[f'hits@{K}']
+      valid_hits = evaluator.eval({
+          'y_pred_pos': pos_valid_pred,
+          'y_pred_neg': neg_valid_pred,
+      })[f'hits@{K}']
+      test_hits = evaluator.eval({
+          'y_pred_pos': pos_test_pred,
+          'y_pred_neg': neg_test_pred,
+      })[f'hits@{K}']
+
+      results[f'Hits@{K}'] = (train_hits, valid_hits, test_hits)
+
+      # # Log the hits@K values
+      # writer.add_scalar(f'Accuracy/Train_Hits@{K}', train_hits, epoch)
+      # writer.add_scalar(f'Accuracy/Valid_Hits@{K}', valid_hits, epoch)
+      # writer.add_scalar(f'Accuracy/Test_Hits@{K}', test_hits, epoch)
+  
+  print(f"Shape of pos_val_pred: {pos_test_pred.shape}")
+  print(f"Shape of neg_val_pred: {neg_test_pred.shape}")
+
+  result_mrr_test = evaluate_mrr(pos_test_pred, neg_test_pred)  
+  
+  for name in ['MRR', 'mrr_hit1', 'mrr_hit3', 'mrr_hit10', 'mrr_hit20', 'mrr_hit50', 'mrr_hit100']:
+      results[name] = (result_mrr_test[name])
+      # writer.add_scalar(f'Accuracy/Test_{name}', result_mrr_test[name], epoch)
+  
+  test_pred = torch.cat([pos_test_pred, neg_test_pred])
+  test_true = torch.cat([torch.ones(pos_test_pred.size(0), dtype=int), 
+                          torch.zeros(neg_test_pred.size(0), dtype=int)])
+  
+  result_auc_test = evaluate_auc(test_pred, test_true)
+  for name in ['AUC', 'AP']:
+      results[name] = (result_auc_test[name])
+      # writer.add_scalar(f'Accuracy/Test_{name}',result_auc_test[name], epoch)
+
+  result_acc_test = acc(pos_test_pred, neg_test_pred)
+  results['ACC'] = (result_acc_test)
+  # writer.add_scalar(f'Accuracy/Test_ACC',result_acc_test, epoch)
+  
+  return results
+
+#TODO: TRAIN
+def train():
+  return 0
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')
@@ -256,6 +386,10 @@ if __name__=='__main__':
 
     parser.add_argument('--pos_dist_quantile', type=float, default=0.001, help="percentage of N**2 edges to keep")
 
+    # MY PARAMETERS
+    parser.add_argument('--mlp_num_layers', type=int, default=3, help="Number of layers in MLP")
+    parser.add_argument('--batch_size', type=int, default=64)
+    
     args = parser.parse_args()
     
     cmd_opt = vars(args)
@@ -265,8 +399,9 @@ if __name__=='__main__':
         merge_cmd_args(cmd_opt, opt)
     except KeyError:
         opt = cmd_opt
-    print(opt['dataset'])
-    data, split_edge = get_dataset(opt['dataset_dir'], opt['dataset'], opt, opt['use_valedges_as_input'], opt['year'])
+    
+    data, splits = get_dataset(opt['dataset_dir'], opt['dataset'], opt, opt['use_valedges_as_input'], opt['year'])
+      
     if args.dataset == "ogbl-citation2":
         opt['metric'] = "MRR"
     if data.x is None:
@@ -281,3 +416,58 @@ if __name__=='__main__':
     device = torch.device(device)
     
     data = data.to(device)
+    
+    if opt['beltrami']:
+      pos_encoding = apply_beltrami(data, opt).to(device)
+      opt['pos_enc_dim'] = pos_encoding.shape[1]
+    else:
+      pos_encoding = None
+
+    if opt['rewire_KNN'] or opt['fa_layer']:
+      model = GNN_KNN(opt, data, device).to(device) if opt["no_early"] else GNNKNNEarly(opt, data, device).to(device)
+    else:
+      model = GNN(opt, data, device).to(device) if opt["no_early"] else GNNEarly(opt, data, device).to(device)
+
+    num_features = data.x.size(1)
+    predictor = LinkPredictor(num_features, opt['hidden_dim'], 1, opt['mlp_num_layers'], opt['dropout']).to(device)
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    # print_model_params(model)
+    optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
+    best_time = best_epoch = train_acc = val_acc = test_acc = 0
+
+    this_test = test_OGB #if opt['dataset'] == 'ogbn-arxiv' else test
+    
+    for epoch in range(1, opt['epoch']):
+      start_time = time.time()
+
+      if opt['rewire_KNN'] and epoch % opt['rewire_KNN_epoch'] == 0 and epoch != 0:
+        ei = apply_KNN(data, pos_encoding, model, opt)
+        model.odeblock.odefunc.edge_index = ei
+
+      loss = train(model, optimizer, data, pos_encoding)
+      
+      results = this_test(model, data, pos_encoding, opt, splits, predictor, opt['batch_size'])
+
+      best_time = opt['time']
+      # if tmp_val_acc > val_acc:
+      #   best_epoch = epoch
+      #   train_acc = tmp_train_acc
+      #   val_acc = tmp_val_acc
+      #   test_acc = tmp_test_acc
+      #   best_time = opt['time']
+      # if not opt['no_early'] and model.odeblock.test_integrator.solver.best_val > val_acc:
+      #   best_epoch = epoch
+      #   val_acc = model.odeblock.test_integrator.solver.best_val
+      #   test_acc = model.odeblock.test_integrator.solver.best_test
+      #   train_acc = model.odeblock.test_integrator.solver.best_train
+      #   best_time = model.odeblock.test_integrator.solver.best_time
+
+      # log = 'Epoch: {:03d}, Runtime {:03f}, Loss {:03f}, forward nfe {:d}, backward nfe {:d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}, Best time: {:.4f}'
+      log = 'Epoch: {:03d}, Runtime {:03f}, Loss {:03f}, forward nfe {:d}, backward nfe {:d}, Best time: {:.4f}, Results: {}'
+
+      print(log.format(epoch, time.time() - start_time, loss, model.fm.sum, model.bm.sum, best_time, results))
+      
+  
+    print('best val accuracy {:03f} with test accuracy {:03f} at epoch {:d} and best time {:03f}'.format(val_acc, test_acc,
+                                                                                                      best_epoch,                                                                                               best_time))
+    print(train_acc, val_acc, test_acc)
