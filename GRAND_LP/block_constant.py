@@ -32,7 +32,7 @@ class ConstantODEblock(ODEblock):
     self.test_integrator = odeint
     self.set_tol()
 
-  def forward(self, x):
+  def forward(self, x, splits, predictor, batch_size):
     t = self.t.type_as(x)
 
     integrator = self.train_integrator if self.training else self.test_integrator
@@ -59,7 +59,10 @@ class ConstantODEblock(ODEblock):
         method=self.opt['method'],
         options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
         atol=self.atol,
-        rtol=self.rtol)
+        rtol=self.rtol,
+        splits=splits,
+        predictor=predictor,
+        batch_size=batch_size)
 
     if self.training and self.nreg > 0:
       z = state_dt[0][1]

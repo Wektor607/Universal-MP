@@ -11,7 +11,7 @@ from GNN_KNN import GNN_KNN
 from GNN_KNN_early import GNNKNNEarly
 from GNN import GNN
 from GNN_early import GNNEarly
-from ogb.nodeproppred import Evaluator
+from ogb.linkproppred import Evaluator
 from torch.utils.data import DataLoader
 
 # I copied the best parameters for the rest of the data sets from ogbn-arxiv
@@ -81,7 +81,9 @@ def print_model_params(model):
       print(param.data.shape)
       
 @torch.no_grad()
-def test_OGB(model, data, pos_encoding, opt, splits, predictor, batch_size):
+def test_OGB(model, predictor, pos_encoding, data, splits, opt):
+  batch_size = opt['batch_size']
+  
   if opt['dataset'] == 'ogbn-arxiv':
     name = 'ogbn-arxiv'
   elif opt['dataset'] == 'ogbl-collab':
@@ -92,38 +94,45 @@ def test_OGB(model, data, pos_encoding, opt, splits, predictor, batch_size):
   h = model(data.x, pos_encoding)
   
   pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
+  neg_train_edge = splits['train']['neg_edge_label_index'].to(data.x.device)
   pos_valid_edge = splits['valid']['pos_edge_label_index'].to(data.x.device)
   neg_valid_edge = splits['valid']['neg_edge_label_index'].to(data.x.device)
   pos_test_edge = splits['test']['pos_edge_label_index'].to(data.x.device)
   neg_test_edge = splits['test']['neg_edge_label_index'].to(data.x.device)
   
   pos_train_preds = []
-  for perm in DataLoader(range(pos_train_edge.size(0)), batch_size):
-      edge = pos_train_edge[perm].t()
+  for perm in DataLoader(range(pos_train_edge.size(1)), batch_size):
+      edge = pos_train_edge[:, perm]#.t()
       pos_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
   pos_train_pred = torch.cat(pos_train_preds, dim=0)
 
+  neg_train_preds = []
+  for perm in DataLoader(range(neg_train_edge.size(1)), batch_size):
+      edge = neg_train_edge[:, perm]#.t()
+      neg_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+  neg_train_pred = torch.cat(neg_train_preds, dim=0)
+
   pos_valid_preds = []
-  for perm in DataLoader(range(pos_valid_edge.size(0)), batch_size):
-      edge = pos_valid_edge[perm].t()
+  for perm in DataLoader(range(pos_valid_edge.size(1)), batch_size):
+      edge = pos_valid_edge[:, perm]#.t()
       pos_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
   pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
 
   neg_valid_preds = []
-  for perm in DataLoader(range(neg_valid_edge.size(0)), batch_size):
-      edge = neg_valid_edge[perm].t()
+  for perm in DataLoader(range(neg_valid_edge.size(1)), batch_size):
+      edge = neg_valid_edge[:, perm]#.t()
       neg_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
   neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
 
   pos_test_preds = []
-  for perm in DataLoader(range(pos_test_edge.size(0)), batch_size):
-      edge = pos_test_edge[perm].t()
+  for perm in DataLoader(range(pos_test_edge.size(1)), batch_size):
+      edge = pos_test_edge[:, perm]#.t()
       pos_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
   pos_test_pred = torch.cat(pos_test_preds, dim=0)
 
   neg_test_preds = []
-  for perm in DataLoader(range(neg_test_edge.size(0)), batch_size):
-      edge = neg_test_edge[perm].t()
+  for perm in DataLoader(range(neg_test_edge.size(1)), batch_size):
+      edge = neg_test_edge[:, perm]#.t()
       neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
   neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
@@ -132,7 +141,7 @@ def test_OGB(model, data, pos_encoding, opt, splits, predictor, batch_size):
       evaluator.K = K
       train_hits = evaluator.eval({
           'y_pred_pos': pos_train_pred,
-          'y_pred_neg': neg_valid_pred,
+          'y_pred_neg': neg_train_pred,
       })[f'hits@{K}']
       valid_hits = evaluator.eval({
           'y_pred_pos': pos_valid_pred,
@@ -174,10 +183,57 @@ def test_OGB(model, data, pos_encoding, opt, splits, predictor, batch_size):
   
   return results
 
-#TODO: TRAIN
-def train():
-  return 0
+def train(model, predictor, pos_encoding, data, splits, optimizer, batch_size):
+    predictor.train()
+    model.train()
+    optimizer.zero_grad()
+    
+    pos_encoding = pos_encoding.to(model.device) if pos_encoding is not None else None
+    
+    h = model(data.x, pos_encoding)
+    
+    pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
+    neg_train_edge = splits['train']['neg_edge_label_index'].to(data.x.device)
+    
+    pos_loss = 0
+    for perm in DataLoader(range(pos_train_edge.size(1)), batch_size, shuffle=True):
+        edge = pos_train_edge[:, perm]#.t()
+        pos_out = predictor(h[edge[0]], h[edge[1]])
+        pos_loss += -torch.log(pos_out + 1e-15).mean()
+    
+    # Normalization
+    # pos_loss /= pos_train_edge.size(1)
+    
+    neg_loss = 0
+    for perm in DataLoader(range(neg_train_edge.size(0)), batch_size, shuffle=True):
+        edge = neg_train_edge[:, perm]#.t()
+        neg_out = predictor(h[edge[0]], h[edge[1]])
+        neg_loss += -torch.log(1 - neg_out + 1e-15).mean()
+    
+    # Normalization
+    # neg_loss /= neg_train_edge.size(1)
+    
+    loss = pos_loss + neg_loss
+    
+    if model.odeblock.nreg > 0:
+        reg_states = tuple(torch.mean(rs) for rs in model.reg_states)
+        regularization_coeffs = model.regularization_coeffs
 
+        reg_loss = sum(
+            reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
+        )
+        loss = loss + reg_loss
+
+    # Update parameters
+    model.fm.update(model.getNFE())
+    model.resetNFE()
+    loss.backward()
+    optimizer.step()
+    model.bm.update(model.getNFE())
+    model.resetNFE()
+    
+    return loss.item()
+  
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')
     ### MPLP PARAMETERS ###
@@ -422,21 +478,22 @@ if __name__=='__main__':
       opt['pos_enc_dim'] = pos_encoding.shape[1]
     else:
       pos_encoding = None
-
-    if opt['rewire_KNN'] or opt['fa_layer']:
-      model = GNN_KNN(opt, data, device).to(device) if opt["no_early"] else GNNKNNEarly(opt, data, device).to(device)
-    else:
-      model = GNN(opt, data, device).to(device) if opt["no_early"] else GNNEarly(opt, data, device).to(device)
-
-    num_features = data.x.size(1)
+    
+    num_features = opt['hidden_dim']
     predictor = LinkPredictor(num_features, opt['hidden_dim'], 1, opt['mlp_num_layers'], opt['dropout']).to(device)
+    batch_size = opt['batch_size']    
+    if opt['rewire_KNN'] or opt['fa_layer']:
+      model = GNN_KNN(opt, data, splits, predictor, batch_size, device).to(device) if opt["no_early"] else GNNKNNEarly(opt, data, splits, predictor, batch_size, device).to(device)
+    else:
+      model = GNN(opt, data, splits, predictor, batch_size, device).to(device) if opt["no_early"] else GNNEarly(opt, data, splits, predictor, batch_size, device).to(device)
+
     parameters = [p for p in model.parameters() if p.requires_grad]
     # print_model_params(model)
     optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
     best_time = best_epoch = train_acc = val_acc = test_acc = 0
 
     this_test = test_OGB #if opt['dataset'] == 'ogbn-arxiv' else test
-    
+  
     for epoch in range(1, opt['epoch']):
       start_time = time.time()
 
@@ -444,9 +501,9 @@ if __name__=='__main__':
         ei = apply_KNN(data, pos_encoding, model, opt)
         model.odeblock.odefunc.edge_index = ei
 
-      loss = train(model, optimizer, data, pos_encoding)
+      loss = train(model, predictor, pos_encoding, data, splits, optimizer, opt['batch_size'])
       
-      results = this_test(model, data, pos_encoding, opt, splits, predictor, opt['batch_size'])
+      results = this_test(model, predictor, pos_encoding, data, splits, opt)
 
       best_time = opt['time']
       # if tmp_val_acc > val_acc:

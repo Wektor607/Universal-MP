@@ -15,8 +15,8 @@ from model_configurations import set_block, set_function
 
 # DONE
 class GNNEarly(BaseGNN):
-  def __init__(self, opt, data, device=torch.device('cpu')):
-    super(GNNEarly, self).__init__(opt, data, device)
+  def __init__(self, opt, data, splits, predictor, batch_size, device=torch.device('cpu')):
+    super(GNNEarly, self).__init__(opt, data, splits, predictor, batch_size, device)
     self.f = set_function(opt)
     block = set_block(opt)
     self.device = device
@@ -56,7 +56,7 @@ class GNNEarly(BaseGNN):
     else:
       x = F.dropout(x, self.opt['input_dropout'], training=self.training)
       x = self.m1(x)
-
+    
     if self.opt['use_mlp']:
       x = F.dropout(x, self.opt['dropout'], training=self.training)
       x = F.dropout(x + self.m11(F.relu(x)), self.opt['dropout'], training=self.training)
@@ -75,13 +75,13 @@ class GNNEarly(BaseGNN):
 
     self.odeblock.set_x0(x)
 
-    with torch.no_grad():
-      self.set_solver_m2()
+    # with torch.no_grad():
+    #   self.set_solver_m2()
 
-    if self.training  and self.odeblock.nreg > 0:
+    if self.training and self.odeblock.nreg > 0:
       z, self.reg_states  = self.odeblock(x)
     else:
-      z = self.odeblock(x)
+      z = self.odeblock(x, self.splits, self.predictor, self.batch_size)
       
     if self.opt['augment']:
       z = torch.split(z, x.shape[1] // 2, dim=1)[0]
