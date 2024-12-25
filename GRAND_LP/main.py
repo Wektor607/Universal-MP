@@ -2,6 +2,7 @@
 import argparse
 import torch
 import time
+from tqdm import tqdm
 
 from load_lp import *
 from metrics import *
@@ -186,53 +187,85 @@ def test_OGB(model, predictor, pos_encoding, data, splits, opt):
 def train(model, predictor, pos_encoding, data, splits, optimizer, batch_size):
     predictor.train()
     model.train()
-    optimizer.zero_grad()
     
     pos_encoding = pos_encoding.to(model.device) if pos_encoding is not None else None
-    
-    h = model(data.x, pos_encoding)
     
     pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
     neg_train_edge = splits['train']['neg_edge_label_index'].to(data.x.device)
     
-    pos_loss = 0
-    for perm in DataLoader(range(pos_train_edge.size(1)), batch_size, shuffle=True):
-        edge = pos_train_edge[:, perm]#.t()
-        pos_out = predictor(h[edge[0]], h[edge[1]])
-        pos_loss += -torch.log(pos_out + 1e-15).mean()
+    total_loss = 0
+    data_loader = DataLoader(range(pos_train_edge.size(1)), batch_size, shuffle=True)
     
-    # Normalization
-    # pos_loss /= pos_train_edge.size(1)
-    
-    neg_loss = 0
-    for perm in DataLoader(range(neg_train_edge.size(0)), batch_size, shuffle=True):
-        edge = neg_train_edge[:, perm]#.t()
-        neg_out = predictor(h[edge[0]], h[edge[1]])
-        neg_loss += -torch.log(1 - neg_out + 1e-15).mean()
-    
-    # Normalization
-    # neg_loss /= neg_train_edge.size(1)
-    
-    loss = pos_loss + neg_loss
-    
-    if model.odeblock.nreg > 0:
-        reg_states = tuple(torch.mean(rs) for rs in model.reg_states)
-        regularization_coeffs = model.regularization_coeffs
+    with tqdm(data_loader, desc="Training Progress", unit="batch") as pbar:
+        for perm in pbar:
+            optimizer.zero_grad()
+            h = model(data.x, pos_encoding)
+            
+            edge = pos_train_edge[:, perm]
+            pos_out = predictor(h[edge[0]], h[edge[1]])
+            pos_loss = -torch.log(pos_out + 1e-15).mean()
+        
+            edge = neg_train_edge[:, perm]
+            neg_out = predictor(h[edge[0]], h[edge[1]])
+            neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
+        
+            loss = pos_loss + neg_loss
+            
+            if model.odeblock.nreg > 0:
+                reg_states = tuple(torch.mean(rs) for rs in model.reg_states)
+                regularization_coeffs = model.regularization_coeffs
 
-        reg_loss = sum(
-            reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
-        )
-        loss = loss + reg_loss
+                reg_loss = sum(
+                    reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
+                )
+                loss = loss + reg_loss
 
-    # Update parameters
-    model.fm.update(model.getNFE())
-    model.resetNFE()
-    loss.backward()
-    optimizer.step()
-    model.bm.update(model.getNFE())
-    model.resetNFE()
+            # Update parameters
+            model.fm.update(model.getNFE())
+            model.resetNFE()
+            loss.backward()
+            optimizer.step()
+            model.bm.update(model.getNFE())
+            model.resetNFE()
+            
+            total_loss += loss.item()
+            # Update progress bar description with current loss
+            pbar.set_postfix({"Loss": loss.item()})
     
-    return loss.item()
+    return total_loss
+
+def grand_dataset(data, splits, opt):
+    edge_index = data.edge_index
+    data.num_nodes = data.x.shape[0]
+    # data.edge_weight = None
+    data.adj_t = SparseTensor.from_edge_index(edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))
+    data.adj_t = data.adj_t.to_symmetric().coalesce()
+    # data.max_x = -1
+    # Use training + validation edges for inference on test set.
+    if opt['use_valedges_as_input']:
+        val_edge_index = splits['valid']['pos_edge_label_index']
+        full_edge_index = torch.cat([edge_index, val_edge_index], dim=-1)
+        data.full_adj_t = SparseTensor.from_edge_index(full_edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)).coalesce()
+        data.full_adj_t = data.full_adj_t.to_symmetric()
+    else:
+        data.full_adj_t = data.adj_t
+    return data
+  
+def random_sampling(splits, scale: float):
+    print(f"train adj shape: {splits['train'].edge_index.shape[1]}")
+
+    for k, data in splits.items():
+        if k!='train':
+            print(f"{k}: original length {data.pos_edge_label_index.shape[1]}")
+            num_samples = int(data.neg_edge_label_index.shape[1] * scale)
+            sampled_indices = np.random.choice(data.neg_edge_label_index.shape[1], num_samples, replace=False)
+            data.pos_edge_label_index = data.pos_edge_label_index[:, sampled_indices]
+            data.neg_edge_label_index = data.neg_edge_label_index[:, sampled_indices]
+            data.neg_edge_label = data.neg_edge_label[sampled_indices]
+            data.pos_edge_label = data.pos_edge_label[sampled_indices]
+            print(f"{k}: downsampled length {data.pos_edge_label_index.shape[1]}")
+
+    return splits
   
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')
@@ -444,7 +477,7 @@ if __name__=='__main__':
 
     # MY PARAMETERS
     parser.add_argument('--mlp_num_layers', type=int, default=3, help="Number of layers in MLP")
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=2048)
     
     args = parser.parse_args()
     
@@ -471,8 +504,11 @@ if __name__=='__main__':
     device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
     
+    # splits = random_sampling(splits, 0.1)
+
+    # data.edge_index = splits['train']['pos_edge_label_index']
+    # data = grand_dataset(data, splits, opt).to(device)
     data = data.to(device)
-    
     if opt['beltrami']:
       pos_encoding = apply_beltrami(data, opt).to(device)
       opt['pos_enc_dim'] = pos_encoding.shape[1]
@@ -502,7 +538,8 @@ if __name__=='__main__':
         model.odeblock.odefunc.edge_index = ei
 
       loss = train(model, predictor, pos_encoding, data, splits, optimizer, opt['batch_size'])
-      
+      print(f'Loss Epoch {epoch}: ', loss)
+      # if epoch % 1 == 0:
       results = this_test(model, predictor, pos_encoding, data, splits, opt)
 
       best_time = opt['time']

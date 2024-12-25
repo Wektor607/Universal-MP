@@ -102,9 +102,13 @@ class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
   def test_OGB(self, h):
     # evaluator = self.evaluator
     data = self.data
+    
     batch_size = self.batch_size
+    
     splits = self.splits
+    
     predictor = self.predictor
+    
     # y_pred = logits.argmax(dim=-1, keepdim=True)
     # train_acc, valid_acc, test_acc = run_evaluator(evaluator, data, y_pred)
     # return [train_acc, valid_acc, test_acc]
