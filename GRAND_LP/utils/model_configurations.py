@@ -1,11 +1,14 @@
-from function_transformer_attention import ODEFuncTransformerAtt
-from function_GAT_attention import ODEFuncAtt
-from function_laplacian_diffusion import LaplacianODEFunc
-from block_transformer_attention import AttODEblock
-from block_constant import ConstantODEblock
-from block_mixed import MixedODEblock
-from block_transformer_hard_attention import HardAttODEblock
-from block_transformer_rewiring import RewireAttODEblock
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from ode_functions.function_transformer_attention import ODEFuncTransformerAtt
+from ode_functions.function_GAT_attention import ODEFuncAtt
+from ode_functions.function_laplacian_diffusion import LaplacianODEFunc
+from ode_blocks.block_transformer_attention import AttODEblock
+from ode_blocks.block_constant import ConstantODEblock
+from ode_blocks.block_mixed import MixedODEblock
+from ode_blocks.block_transformer_hard_attention import HardAttODEblock
+from ode_blocks.block_transformer_rewiring import RewireAttODEblock
 
 class BlockNotDefined(Exception):
   pass

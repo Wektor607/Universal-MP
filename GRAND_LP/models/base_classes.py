@@ -1,9 +1,12 @@
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 from torch import nn
 from torch_geometric.nn.conv import MessagePassing
-from utils import Meter
-from regularized_ODE_function import RegularizedODEfunc
-import regularized_ODE_function as reg_lib
+from utils.utils import Meter
+from ode_functions.regularized_ODE_function import RegularizedODEfunc
+import ode_functions.regularized_ODE_function as reg_lib
 import six
 import torch.nn.functional as F
 
@@ -100,7 +103,6 @@ class BaseGNN(MessagePassing):
     super(BaseGNN, self).__init__()
     self.opt = opt
     self.T = opt['time']
-    # self.num_classes = dataset.num_classes
     self.num_features = data.num_features
     self.num_nodes = data.num_nodes
     self.device = device
@@ -122,19 +124,10 @@ class BaseGNN(MessagePassing):
       self.m11 = nn.Linear(opt['hidden_dim'], opt['hidden_dim'])
       self.m12 = nn.Linear(opt['hidden_dim'], opt['hidden_dim'])
     
-    # OLD
-    # if opt['use_labels']:
-    #   # todo - fastest way to propagate this everywhere, but error prone - refactor later
-    #   opt['hidden_dim'] = opt['hidden_dim'] + dataset.num_classes
-    # else:
-    #   self.hidden_dim = opt['hidden_dim']
-    # NEW
     self.hidden_dim = opt['hidden_dim']
     
     if opt['fc_out']:
       self.fc = nn.Linear(opt['hidden_dim'], opt['hidden_dim'])
-    
-    # self.m2 = self.dot_product_decoder #nn.Linear(opt['hidden_dim'], dataset.num_classes)
 
     if self.opt['batch_norm']:
       self.bn_in = torch.nn.BatchNorm1d(opt['hidden_dim'])
@@ -151,7 +144,6 @@ class BaseGNN(MessagePassing):
 
   def reset(self):
     self.m1.reset_parameters()
-    # self.m2.reset_parameters()
   
   def __repr__(self):
     return self.__class__.__name__

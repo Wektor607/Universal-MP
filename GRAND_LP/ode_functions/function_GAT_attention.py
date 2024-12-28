@@ -1,11 +1,14 @@
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 from torch import nn
 from torch_geometric.utils import softmax
 import torch_sparse
 from torch_geometric.utils.loop import add_remaining_self_loops
 # from data import get_dataset
-from utils import MaxNFEException
-from base_classes import ODEFunc
+from utils.utils import MaxNFEException
+from models.base_classes import ODEFunc
 
 
 class ODEFuncAtt(ODEFunc):

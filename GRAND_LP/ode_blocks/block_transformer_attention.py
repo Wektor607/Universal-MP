@@ -1,7 +1,10 @@
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
-from function_transformer_attention import SpGraphTransAttentionLayer
-from base_classes import ODEblock
-from utils import get_rw_adj
+from ode_functions.function_transformer_attention import SpGraphTransAttentionLayer
+from models.base_classes import ODEblock
+from utils.utils import get_rw_adj
 
 
 class AttODEblock(ODEblock):
@@ -33,7 +36,7 @@ class AttODEblock(ODEblock):
     attention, values = self.multihead_att_layer(x, self.odefunc.edge_index)
     return attention
 
-  def forward(self, x):
+  def forward(self, x, splits, predictor, batch_size):
     t = self.t.type_as(x)
     self.odefunc.attention_weights = self.get_attention_weights(x)
     self.reg_odefunc.odefunc.attention_weights = self.odefunc.attention_weights
@@ -45,23 +48,34 @@ class AttODEblock(ODEblock):
     state = (x,) + reg_states if self.training and self.nreg > 0 else x
 
     if self.opt["adjoint"] and self.training:
-      state_dt = integrator(
-        func, state, t,
-        method=self.opt['method'],
-        options={'step_size': self.opt['step_size']},
-        adjoint_method=self.opt['adjoint_method'],
-        adjoint_options={'step_size': self.opt['adjoint_step_size']},
-        atol=self.atol,
-        rtol=self.rtol,
-        adjoint_atol=self.atol_adjoint,
-        adjoint_rtol=self.rtol_adjoint)
+        state_dt = integrator(
+          func, state, t,
+          method=self.opt['method'],
+          options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+          adjoint_method=self.opt['adjoint_method'],
+          adjoint_options=dict(step_size=self.opt['adjoint_step_size'], max_iters=self.opt['max_iters']),
+          atol=self.atol,
+          rtol=self.rtol,
+          adjoint_atol=self.atol_adjoint,
+          adjoint_rtol=self.rtol_adjoint)
     else:
-      state_dt = integrator(
-        func, state, t,
-        method=self.opt['method'],
-        options={'step_size': self.opt['step_size']},
-        atol=self.atol,
-        rtol=self.rtol)
+        if self.opt["no_early"] == True:
+          state_dt = integrator(
+              func, state, t,
+              method=self.opt['method'],
+              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+              atol=self.atol,
+              rtol=self.rtol)
+        else:
+          state_dt = integrator(
+              func, state, t,
+              method=self.opt['method'],
+              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+              atol=self.atol,
+              rtol=self.rtol,
+              splits=splits,
+              predictor=predictor,
+              batch_size=batch_size)
 
     if self.training and self.nreg > 0:
       z = state_dt[0][1]

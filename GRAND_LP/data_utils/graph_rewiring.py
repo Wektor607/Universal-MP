@@ -1,6 +1,9 @@
 """
 functions to generate a graph from the input graph and features
 """
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -10,12 +13,12 @@ from torch_scatter import scatter
 from torch_geometric.transforms.two_hop import TwoHop
 from torch_geometric.utils import add_self_loops, to_undirected, to_dense_adj, dense_to_sparse
 from torch_geometric.transforms import GDC
-from utils import get_rw_adj, get_full_adjacency, ROOT_DIR
+from utils.utils import get_rw_adj, get_full_adjacency, ROOT_DIR
 from pykeops.torch import LazyTensor
 import os
 import pickle
-from distances_kNN import apply_dist_KNN, apply_dist_threshold, get_distances, apply_feat_KNN
-from hyperbolic_distances import hyperbolize
+from metrics.distances_kNN import apply_dist_KNN, apply_dist_threshold, get_distances, apply_feat_KNN
+from metrics.hyperbolic_distances import hyperbolize
 
 ### for custom GDC
 import torch

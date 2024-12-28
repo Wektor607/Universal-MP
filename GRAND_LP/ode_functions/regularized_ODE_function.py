@@ -1,6 +1,8 @@
 ## This code has been adapted from https://github.com/cfinlay/ffjord-rnode/ 
 ## MIT License
+import os, sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 import torch.nn as nn
 

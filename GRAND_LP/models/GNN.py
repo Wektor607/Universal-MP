@@ -1,24 +1,23 @@
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 from torch import nn
 import torch.nn.functional as F
-from base_classes import BaseGNN
-from model_configurations import set_block, set_function
+from models.base_classes import BaseGNN
+from utils.model_configurations import set_block, set_function
 
 # DONE
 # Define the GNN model.
 class GNN(BaseGNN):
-  def __init__(self, opt, data, device=torch.device('cpu')):
-    super(GNN, self).__init__(opt, data, device)
+  def __init__(self, opt, data, splits, predictor, batch_size, device=torch.device('cpu')):
+    super(GNN, self).__init__(opt, data, splits, predictor, batch_size, device)
     self.f = set_function(opt)
     block = set_block(opt)
     time_tensor = torch.tensor([0, self.T]).to(device)
     self.odeblock = block(self.f, self.regularization_fns, opt, data, device, t=time_tensor).to(device)
 
   def forward(self, x, pos_encoding=None):
-    # Encode each node based on its feature.
-    # if self.opt['use_labels']:
-    #   y = x[:, -self.num_classes:]
-    #   x = x[:, :-self.num_classes]
 
     if self.opt['beltrami']:
       x = F.dropout(x, self.opt['input_dropout'], training=self.training)
@@ -36,9 +35,6 @@ class GNN(BaseGNN):
       x = F.dropout(x + self.m12(F.relu(x)), self.opt['dropout'], training=self.training)
     # todo investigate if some input non-linearity solves the problem with smooth deformations identified in the ANODE paper
 
-    # if self.opt['use_labels']:
-    #   x = torch.cat([x, y], dim=-1)
-
     if self.opt['batch_norm']:
       x = self.bn_in(x)
 
@@ -52,21 +48,9 @@ class GNN(BaseGNN):
     if self.training and self.odeblock.nreg > 0:
       z, self.reg_states = self.odeblock(x)
     else:
-      z = self.odeblock(x)
+      z = self.odeblock(x, self.splits, self.predictor, self.batch_size)
 
     if self.opt['augment']:
       z = torch.split(z, x.shape[1] // 2, dim=1)[0]
 
-    # Activation.
-    z = F.relu(z)
-
-    if self.opt['fc_out']:
-      z = self.fc(z)
-      z = F.relu(z)
-
-    # Dropout.
-    z = F.dropout(z, self.opt['dropout'], training=self.training)
-
-    # Decode each node embedding to get node label.
-    # z = self.m2(z)
     return z

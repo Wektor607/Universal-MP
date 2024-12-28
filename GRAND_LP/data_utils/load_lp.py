@@ -1,4 +1,6 @@
-import os
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pickle
 import torch
 import numpy as np
@@ -16,13 +18,13 @@ from torch_geometric.data.collate import collate
 import scipy.io as sio
 from torch_geometric.data import Data
 from torch_geometric.transforms.two_hop import TwoHop
-from distances_kNN import apply_dist_KNN, apply_dist_threshold, get_distances, apply_feat_KNN
-from hyperbolic_distances import hyperbolize
+from metrics.distances_kNN import apply_dist_KNN, apply_dist_threshold, get_distances, apply_feat_KNN
+from metrics.hyperbolic_distances import hyperbolize
 from torch_geometric.transforms import GDC
 from torch_geometric.utils import add_self_loops, is_undirected, to_dense_adj, \
   dense_to_sparse, to_undirected
 import torch_geometric.transforms as T
-from typing import Dict, Tuple, List, Union
+from typing import Union
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -56,8 +58,8 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
             # TEMP FIX: ogbl-collab has directed edges. adj_t.to_symmetric will
             # double the edge weight. temporary fix like this to avoid too dense graph.
             if name == "ogbl-collab":
-                data.edge_weight = data.edge_weight/2
-                
+                data.edge_weight = data.edge_weight / 2
+
         if 'edge_index' in split_edge['train']:
             key = 'edge_index'
         else:
@@ -87,11 +89,12 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
         # make node feature as float
         if data.x is not None:
             data.x = data.x.to(torch.float)
+        # Normalization
+        data.x = (data.x - data.x.mean(dim=0)) / data.x.std(dim=0)
             
         # I comment it, because we need it for models
         # if name != 'ogbl-ddi':
         #     del data.edge_index
-    
         return data, split_edge
 
     pyg_dataset_dict = {

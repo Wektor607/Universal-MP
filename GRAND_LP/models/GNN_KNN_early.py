@@ -1,7 +1,9 @@
 """
 A GNN used at test time that supports early stopping during the integrator
 """
+import os, sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 import torch.nn.functional as F
 import argparse
@@ -9,44 +11,29 @@ from torch_geometric.nn import GCNConv, ChebConv  # noqa
 import time
 # from data import get_dataset
 # from run_GNN import get_optimizer, train, test
-from early_stop_solver import EarlyStopInt
-from base_classes import BaseGNN
-from model_configurations import set_block, set_function
+from models.early_stop_solver import EarlyStopInt
+from models.base_classes import BaseGNN
+from utils.model_configurations import set_block, set_function
 
 # DONE
-class GNNEarly(BaseGNN):
+class GNNKNNEarly(BaseGNN):
   def __init__(self, opt, data, splits, predictor, batch_size, device=torch.device('cpu')):
-    super(GNNEarly, self).__init__(opt, data, splits, predictor, batch_size, device)
+    super(GNNKNNEarly, self).__init__(opt, data, splits, predictor, batch_size, device)
     self.f = set_function(opt)
     block = set_block(opt)
-    self.device = device
     time_tensor = torch.tensor([0, self.T]).to(device)
-    # self.regularization_fns = ()
     self.odeblock = block(self.f, self.regularization_fns, opt, data, device, t=time_tensor).to(device)
     # overwrite the test integrator with this custom one
     with torch.no_grad():
       self.odeblock.test_integrator = EarlyStopInt(self.T, self.opt, self.device)
       self.set_solver_data(data)
 
-  def set_solver_m2(self):
-    self.odeblock.test_integrator.m2_weight = self.m2.weight.data.detach().clone().to(self.device)
-    self.odeblock.test_integrator.m2_bias = self.m2.bias.data.detach().clone().to(self.device)
-
   def set_solver_data(self, data):
     self.odeblock.test_integrator.data = data
 
-
-  def cleanup(self):
-    del self.odeblock.test_integrator.m2
-    torch.cuda.empty_cache()
-
-
-  def forward(self, x, pos_encoding=None):
+  def forward(self, x, pos_encoding):
     # Encode each node based on its feature.
-    # if self.opt['use_labels']:
-    #   y = x[:, -self.num_classes:]
-    #   x = x[:, :-self.num_classes]
-
+    
     if self.opt['beltrami']:
       x = F.dropout(x, self.opt['input_dropout'], training=self.training)
       x = self.mx(x)
@@ -56,14 +43,11 @@ class GNNEarly(BaseGNN):
     else:
       x = F.dropout(x, self.opt['input_dropout'], training=self.training)
       x = self.m1(x)
-    
+
     if self.opt['use_mlp']:
       x = F.dropout(x, self.opt['dropout'], training=self.training)
       x = F.dropout(x + self.m11(F.relu(x)), self.opt['dropout'], training=self.training)
       x = F.dropout(x + self.m12(F.relu(x)), self.opt['dropout'], training=self.training)
-
-    # if self.opt['use_labels']:
-    #   x = torch.cat([x, y], dim=-1)
 
     if self.opt['batch_norm']:
       x = self.bn_in(x)
@@ -75,35 +59,17 @@ class GNNEarly(BaseGNN):
 
     self.odeblock.set_x0(x)
 
-    # with torch.no_grad():
-    #   self.set_solver_m2()
-
     if self.training and self.odeblock.nreg > 0:
-      z, self.reg_states  = self.odeblock(x)
+      z, self.reg_states = self.odeblock(x)
     else:
       z = self.odeblock(x, self.splits, self.predictor, self.batch_size)
-      
+
     if self.opt['augment']:
       z = torch.split(z, x.shape[1] // 2, dim=1)[0]
 
-    # Activation.
-    z = F.relu(z)
-
-    if self.opt['fc_out']:
-      z = self.fc(z)
-      z = F.relu(z)
-
-    # Dropout.
-    z = F.dropout(z, self.opt['dropout'], training=self.training)
-
-    # # Decode each node embedding to get node label.
-    # z = self.m2(z)
     return z
 
   def forward_encoder(self, x, pos_encoding):
-    # if self.opt['use_labels']:
-    #   y = x[:, -self.num_classes:]
-    #   x = x[:, :-self.num_classes]
 
     if self.opt['beltrami']:
       x = self.mx(x)
@@ -116,9 +82,6 @@ class GNNEarly(BaseGNN):
       x = F.dropout(x, self.opt['dropout'], training=self.training)
       x = x + self.m11(F.relu(x))
       x = x + self.m12(F.relu(x))
-
-    # if self.opt['use_labels']:
-    #   x = torch.cat([x, y], dim=-1)
 
     if self.opt['batch_norm']:
       x = self.bn_in(x)
@@ -206,22 +169,26 @@ class GNNEarly(BaseGNN):
 #   parser.add_argument('--augment', action='store_true',
 #                       help='double the length of the feature vector by appending zeros to stabilist ODE learning')
 #   parser.add_argument('--alpha_dim', type=str, default='sc', help='choose either scalar (sc) or vector (vc) alpha')
-#   parser.add_argument('--no_alpha_sigmoid', dest='no_alpha_sigmoid', action='store_true', help='apply sigmoid before multiplying by alpha')
+#   parser.add_argument('--no_alpha_sigmoid', dest='no_alpha_sigmoid', action='store_true',
+#                       help='apply sigmoid before multiplying by alpha')
 #   parser.add_argument('--beta_dim', type=str, default='sc', help='choose either scalar (sc) or vector (vc) beta')
 #   parser.add_argument('--block', type=str, default='constant', help='constant, mixed, attention, SDE')
 #   parser.add_argument('--function', type=str, default='laplacian', help='laplacian, transformer, dorsey, GAT, SDE')
 #   # ODE args
 #   parser.add_argument('--method', type=str, default='dopri5',
 #                       help="set the numerical solver: dopri5, euler, rk4, midpoint")
-#   parser.add_argument('--step_size', type=float, default=1, help='fixed step size when using fixed step solvers e.g. rk4')
+#   parser.add_argument('--step_size', type=float, default=1,
+#                       help='fixed step size when using fixed step solvers e.g. rk4')
 #   parser.add_argument('--max_iters', type=int, default=100,
 #                       help='fixed step size when using fixed step solvers e.g. rk4')
 #   parser.add_argument(
 #     "--adjoint_method", type=str, default="adaptive_heun",
 #     help="set the numerical solver for the backward pass: dopri5, euler, rk4, midpoint"
 #   )
-#   parser.add_argument('--adjoint', dest='adjoint', action='store_true', help='use the adjoint ODE method to reduce memory footprint')
-#   parser.add_argument('--adjoint_step_size', type=float, default=1, help='fixed step size when using fixed step adjoint solvers e.g. rk4')
+#   parser.add_argument('--adjoint', dest='adjoint', action='store_true',
+#                       help='use the adjoint ODE method to reduce memory footprint')
+#   parser.add_argument('--adjoint_step_size', type=float, default=1,
+#                       help='fixed step size when using fixed step adjoint solvers e.g. rk4')
 #   parser.add_argument('--tol_scale', type=float, default=1., help='multiplier for atol and rtol')
 #   parser.add_argument("--tol_scale_adjoint", type=float, default=1.0,
 #                       help="multiplier for adjoint_atol and adjoint_rtol")
@@ -242,8 +209,10 @@ class GNNEarly(BaseGNN):
 #                       help='the size to project x to before calculating att scores')
 #   parser.add_argument('--mix_features', dest='mix_features', action='store_true',
 #                       help='apply a feature transformation xW to the ODE')
-#   parser.add_argument("--max_nfe", type=int, default=1000, help="Maximum number of function evaluations in an epoch. Stiff ODEs will hang if not set.")
-#   parser.add_argument('--reweight_attention', dest='reweight_attention', action='store_true', help="multiply attention scores by edge weights before softmax")
+#   parser.add_argument("--max_nfe", type=int, default=1000,
+#                       help="Maximum number of function evaluations in an epoch. Stiff ODEs will hang if not set.")
+#   parser.add_argument('--reweight_attention', dest='reweight_attention', action='store_true',
+#                       help="multiply attention scores by edge weights before softmax")
 #   # regularisation args
 #   parser.add_argument('--jacobian_norm2', type=float, default=None, help="int_t ||df/dx||_F^2")
 #   parser.add_argument('--total_deriv', type=float, default=None, help="int_t ||df/dt||^2")
@@ -256,7 +225,8 @@ class GNNEarly(BaseGNN):
 #   parser.add_argument('--gdc_method', type=str, default='ppr', help="ppr, heat, coeff")
 #   parser.add_argument('--gdc_sparsification', type=str, default='topk', help="threshold, topk")
 #   parser.add_argument('--gdc_k', type=int, default=64, help="number of neighbours to sparsify to when using topk")
-#   parser.add_argument('--gdc_threshold', type=float, default=0.0001, help="obove this edge weight, keep edges when using threshold")
+#   parser.add_argument('--gdc_threshold', type=float, default=0.0001,
+#                       help="obove this edge weight, keep edges when using threshold")
 #   parser.add_argument('--gdc_avg_degree', type=int, default=64,
 #                       help="if gdc_threshold is not given can be calculated by specifying avg degree")
 #   parser.add_argument('--ppr_alpha', type=float, default=0.05, help="teleport probability")

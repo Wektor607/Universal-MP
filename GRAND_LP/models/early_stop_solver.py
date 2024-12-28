@@ -1,3 +1,6 @@
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torchdiffeq
 from torchdiffeq._impl.dopri5 import _DORMAND_PRINCE_SHAMPINE_TABLEAU, DPS_C_MID
 from torchdiffeq._impl.solvers import FixedGridODESolver
@@ -9,24 +12,8 @@ import copy
 from torchdiffeq._impl.interp import _interp_evaluate
 from torchdiffeq._impl.rk_common import RKAdaptiveStepsizeODESolver, rk4_alt_step_func
 from ogb.linkproppred import Evaluator
-from metrics import *
+from metrics.metrics import *
 from torch.utils.data import DataLoader
-
-# def run_evaluator(evaluator, data, y_pred):
-#   train_acc = evaluator.eval({
-#     'y_true': data.y[data.train_mask],
-#     'y_pred': y_pred[data.train_mask],
-#   })['acc']
-#   valid_acc = evaluator.eval({
-#     'y_true': data.y[data.val_mask],
-#     'y_pred': y_pred[data.val_mask],
-#   })['acc']
-#   test_acc = evaluator.eval({
-#     'y_true': data.y[data.test_mask],
-#     'y_pred': y_pred[data.test_mask],
-#   })['acc']
-#   return train_acc, valid_acc, test_acc
-
 
 class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
   order = 5
@@ -36,9 +23,6 @@ class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
   def __init__(self, func, y0, rtol, atol, opt, splits, predictor, batch_size, **kwargs):
     super(EarlyStopDopri5, self).__init__(func, y0, rtol, atol, **kwargs)
 
-    self.lf = torch.nn.CrossEntropyLoss()
-    self.m2_weight = None
-    self.m2_bias = None
     self.data = None
     self.splits = splits 
     self.predictor = predictor 
@@ -50,7 +34,6 @@ class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
     self.ode_test = self.test_OGB if opt['dataset'] in ['ogbn-arxiv', 'ogbl-collab'] else self.test
     self.dataset = opt['dataset']
     if opt['dataset'] in ['ogbn-arxiv', 'ogbl-collab']:
-      self.lf = torch.nn.functional.nll_loss
       self.evaluator = Evaluator(name=opt['dataset'])
 
   def set_accs(self, train, val, test, time):
@@ -77,81 +60,73 @@ class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
     :return: The state, x(next_t)
     """
     n_steps = 0
+    
     while next_t > self.rk_state.t1 and n_steps < self.max_test_steps:
       self.rk_state = self._adaptive_step(self.rk_state)
       n_steps += 1
-      train_acc, val_acc, test_acc = self.evaluate(self.rk_state)
-      if val_acc > self.best_val:
-        self.set_accs(train_acc, val_acc, test_acc, self.rk_state.t1)
+      train_hits100, val_hits100, test_hits100 = self.evaluate(self.rk_state)
+      
+      if test_hits100 > self.best_test:
+        self.set_accs(train_hits100, val_hits100, test_hits100, self.rk_state.t1)
+
     new_t = next_t
     if n_steps < self.max_test_steps:
       return (new_t, _interp_evaluate(self.rk_state.interp_coeff, self.rk_state.t0, self.rk_state.t1, next_t))
     else:
       return (new_t, _interp_evaluate(self.rk_state.interp_coeff, self.rk_state.t0, self.rk_state.t1, self.rk_state.t1))
 
-  # @torch.no_grad()
-  # def test(self, logits):
-  #   accs = []
-  #   for _, mask in self.data('train_mask', 'val_mask', 'test_mask'):
-  #     pred = logits[mask].max(1)[1]
-  #     acc = pred.eq(self.data.y[mask]).sum().item() / mask.sum().item()
-  #     accs.append(acc)
-  #   return accs
-
   @torch.no_grad()
   def test_OGB(self, h):
-    # evaluator = self.evaluator
     data = self.data
-    
     batch_size = self.batch_size
-    
     splits = self.splits
-    
     predictor = self.predictor
+    predictor.eval()
     
-    # y_pred = logits.argmax(dim=-1, keepdim=True)
-    # train_acc, valid_acc, test_acc = run_evaluator(evaluator, data, y_pred)
-    # return [train_acc, valid_acc, test_acc]
     pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
     neg_train_edge = splits['train']['neg_edge_label_index'].to(data.x.device)
     pos_valid_edge = splits['valid']['pos_edge_label_index'].to(data.x.device)
     neg_valid_edge = splits['valid']['neg_edge_label_index'].to(data.x.device)
     pos_test_edge = splits['test']['pos_edge_label_index'].to(data.x.device)
     neg_test_edge = splits['test']['neg_edge_label_index'].to(data.x.device)
-    # print(splits)
+    
     pos_train_preds = []
     for perm in DataLoader(range(pos_train_edge.size(1)), batch_size):
-        edge = pos_train_edge[:, perm]#.t()
+        edge = pos_train_edge[:, perm]
         pos_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     pos_train_pred = torch.cat(pos_train_preds, dim=0)
+    print(f"Positive predictions (min, max): {pos_train_pred.min().item()}, {pos_train_pred.max().item()}")
+    print(f"Positive predictions (mean, std): {pos_train_pred.mean().item()}, {pos_train_pred.std().item()}")
 
     neg_train_preds = []
     for perm in DataLoader(range(neg_train_edge.size(1)), batch_size):
-        edge = neg_train_edge[:, perm]#.t()
+        edge = neg_train_edge[:, perm]
         neg_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     neg_train_pred = torch.cat(neg_train_preds, dim=0)
+    print(f"Negative predictions (min, max): {neg_train_pred.min().item()}, {neg_train_pred.max().item()}")
+    print(f"Negative predictions (mean, std): {neg_train_pred.mean().item()}, {neg_train_pred.std().item()}")
 
     pos_valid_preds = []
     for perm in DataLoader(range(pos_valid_edge.size(1)), batch_size):
-        edge = pos_valid_edge[:, perm]#.t()
+        edge = pos_valid_edge[:, perm]
         pos_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
 
     neg_valid_preds = []
     for perm in DataLoader(range(neg_valid_edge.size(1)), batch_size):
-        edge = neg_valid_edge[:, perm]#.t()
+        edge = neg_valid_edge[:, perm]
         neg_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
 
     pos_test_preds = []
     for perm in DataLoader(range(pos_test_edge.size(1)), batch_size):
-        edge = pos_test_edge[:, perm]#.t()
+        edge = pos_test_edge[:, perm]
         pos_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     pos_test_pred = torch.cat(pos_test_preds, dim=0)
 
     neg_test_preds = []
     for perm in DataLoader(range(neg_test_edge.size(1)), batch_size):
-        edge = neg_test_edge[:, perm]#.t()
+        edge = neg_test_edge[:, perm]
         neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
     neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
@@ -203,25 +178,11 @@ class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
 
   @torch.no_grad()
   def evaluate(self, rkstate):
-    # Activation.
     z = rkstate.y1
-    # if not self.m2_weight.shape[1] == z.shape[1]:  # system has been augmented
-    #   z = torch.split(z, self.m2_weight.shape[1], dim=1)[0]
-    z = F.relu(z)
-    # z = F.linear(z, self.m2_weight, self.m2_bias)
-    # t0, t1 = float(self.rk_state.t0), float(self.rk_state.t1)
-    # if self.dataset == 'ogbn-arxiv':
-    #   z = z.log_softmax(dim=-1)
-    #   loss = self.lf(z[self.data.train_mask], self.data.y.squeeze()[self.data.train_mask])
-    # else:
-    #   loss = self.lf(z[self.data.train_mask], self.data.y[self.data.train_mask])
     train_acc, val_acc, test_acc = self.ode_test(z)
     # log = 'ODE eval t0 {:.3f}, t1 {:.3f} Loss: {:.4f}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     # print(log.format(t0, t1, loss, train_acc, val_acc, tmp_test_acc))
     return train_acc, val_acc, test_acc
-
-  def set_m2(self, m2):
-    self.m2 = copy.deepcopy(m2)
 
   def set_data(self, data):
     if self.data is None:
@@ -230,20 +191,19 @@ class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
 class EarlyStopRK4(FixedGridODESolver):
   order = 4
 
-  def __init__(self, func, y0, opt, eps=0, **kwargs):
+  def __init__(self, func, y0, opt, splits, predictor, batch_size, eps=0, **kwargs):
     super(EarlyStopRK4, self).__init__(func, y0, **kwargs)
     self.eps = torch.as_tensor(eps, dtype=self.dtype, device=self.device)
-    self.lf = torch.nn.CrossEntropyLoss()
-    self.m2_weight = None
-    self.m2_bias = None
     self.data = None
+    self.splits = splits 
+    self.predictor = predictor 
+    self.batch_size = batch_size
     self.best_val = 0
     self.best_test = 0
     self.best_time = 0
-    self.ode_test = self.test_OGB if opt['dataset'] == 'ogbn-arxiv' else self.test
+    self.ode_test = self.test_OGB if opt['dataset'] in ['ogbn-arxiv', 'ogbl-collab'] else self.test
     self.dataset = opt['dataset']
-    if opt['dataset'] == 'ogbn-arxiv':
-      self.lf = torch.nn.functional.nll_loss
+    if opt['dataset'] in ['ogbn-arxiv', 'ogbl-collab']:
       self.evaluator = Evaluator(name=opt['dataset'])
 
   def _step_func(self, func, t, dt, t1, y):
@@ -271,9 +231,9 @@ class EarlyStopRK4(FixedGridODESolver):
     for t0, t1 in zip(time_grid[:-1], time_grid[1:]):
       dy = self._step_func(self.func, t0, t1 - t0, t1, y0)
       y1 = y0 + dy
-      train_acc, val_acc, test_acc = self.evaluate(y1, t0, t1)
-      if val_acc > self.best_val:
-        self.set_accs(train_acc, val_acc, test_acc, t1)
+      train_hits100, val_hits100, test_hits100 = self.evaluate(y1, t0, t1)
+      if test_hits100 > self.best_val:
+        self.set_accs(train_hits100, val_hits100, test_hits100, t1)
 
       while j < len(t) and t1 >= t[j]:
         solution[j] = self._linear_interp(t0, t1, y0, y1, t[j])
@@ -282,42 +242,113 @@ class EarlyStopRK4(FixedGridODESolver):
 
     return t1, solution
 
-  # @torch.no_grad()
-  # def test(self, logits):
-  #   accs = []
-  #   for _, mask in self.data('train_mask', 'val_mask', 'test_mask'):
-  #     pred = logits[mask].max(1)[1]
-  #     acc = pred.eq(self.data.y[mask]).sum().item() / mask.sum().item()
-  #     accs.append(acc)
-  #   return accs
-
   @torch.no_grad()
-  def test_OGB(self, logits):
-    evaluator = self.evaluator
+  def test_OGB(self, h):
     data = self.data
-    y_pred = logits.argmax(dim=-1, keepdim=True)
-    train_acc, valid_acc, test_acc = run_evaluator(evaluator, data, y_pred)
-    return [train_acc, valid_acc, test_acc]
+    batch_size = self.batch_size
+    splits = self.splits
+    predictor = self.predictor
+    predictor.eval()
+    
+    pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
+    neg_train_edge = splits['train']['neg_edge_label_index'].to(data.x.device)
+    pos_valid_edge = splits['valid']['pos_edge_label_index'].to(data.x.device)
+    neg_valid_edge = splits['valid']['neg_edge_label_index'].to(data.x.device)
+    pos_test_edge = splits['test']['pos_edge_label_index'].to(data.x.device)
+    neg_test_edge = splits['test']['neg_edge_label_index'].to(data.x.device)
+    
+    pos_train_preds = []
+    for perm in DataLoader(range(pos_train_edge.size(1)), batch_size):
+        edge = pos_train_edge[:, perm]
+        pos_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+    pos_train_pred = torch.cat(pos_train_preds, dim=0)
+    print(f"Positive predictions (min, max): {pos_train_pred.min().item()}, {pos_train_pred.max().item()}")
+    print(f"Positive predictions (mean, std): {pos_train_pred.mean().item()}, {pos_train_pred.std().item()}")
+
+    neg_train_preds = []
+    for perm in DataLoader(range(neg_train_edge.size(1)), batch_size):
+        edge = neg_train_edge[:, perm]
+        neg_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+    neg_train_pred = torch.cat(neg_train_preds, dim=0)
+    print(f"Negative predictions (min, max): {neg_train_pred.min().item()}, {neg_train_pred.max().item()}")
+    print(f"Negative predictions (mean, std): {neg_train_pred.mean().item()}, {neg_train_pred.std().item()}")
+
+    pos_valid_preds = []
+    for perm in DataLoader(range(pos_valid_edge.size(1)), batch_size):
+        edge = pos_valid_edge[:, perm]
+        pos_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+    pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
+
+    neg_valid_preds = []
+    for perm in DataLoader(range(neg_valid_edge.size(1)), batch_size):
+        edge = neg_valid_edge[:, perm]
+        neg_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+    neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
+
+    pos_test_preds = []
+    for perm in DataLoader(range(pos_test_edge.size(1)), batch_size):
+        edge = pos_test_edge[:, perm]
+        pos_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+    pos_test_pred = torch.cat(pos_test_preds, dim=0)
+
+    neg_test_preds = []
+    for perm in DataLoader(range(neg_test_edge.size(1)), batch_size):
+        edge = neg_test_edge[:, perm]
+        neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
+    neg_test_pred = torch.cat(neg_test_preds, dim=0)
+
+    results = {}
+    for K in [1, 3, 10, 20, 50, 100]:
+        self.evaluator.K = K
+        train_hits = self.evaluator.eval({
+            'y_pred_pos': pos_train_pred,
+            'y_pred_neg': neg_train_pred,
+        })[f'hits@{K}']
+        valid_hits = self.evaluator.eval({
+            'y_pred_pos': pos_valid_pred,
+            'y_pred_neg': neg_valid_pred,
+        })[f'hits@{K}']
+        test_hits = self.evaluator.eval({
+            'y_pred_pos': pos_test_pred,
+            'y_pred_neg': neg_test_pred,
+        })[f'hits@{K}']
+
+        results[f'Hits@{K}'] = (train_hits, valid_hits, test_hits)
+
+        # # Log the hits@K values
+        # writer.add_scalar(f'Accuracy/Train_Hits@{K}', train_hits, epoch)
+        # writer.add_scalar(f'Accuracy/Valid_Hits@{K}', valid_hits, epoch)
+        # writer.add_scalar(f'Accuracy/Test_Hits@{K}', test_hits, epoch)
+    
+    # print(f"Shape of pos_val_pred: {pos_test_pred.shape}")
+    # print(f"Shape of neg_val_pred: {neg_test_pred.shape}")
+
+    result_mrr_test = evaluate_mrr(pos_test_pred, neg_test_pred)  
+    
+    for name in ['MRR', 'mrr_hit1', 'mrr_hit3', 'mrr_hit10', 'mrr_hit20', 'mrr_hit50', 'mrr_hit100']:
+        results[name] = (result_mrr_test[name])
+        # writer.add_scalar(f'Accuracy/Test_{name}', result_mrr_test[name], epoch)
+    
+    test_pred = torch.cat([pos_test_pred, neg_test_pred])
+    test_true = torch.cat([torch.ones(pos_test_pred.size(0), dtype=int), 
+                            torch.zeros(neg_test_pred.size(0), dtype=int)])
+    
+    result_auc_test = evaluate_auc(test_pred, test_true)
+    for name in ['AUC', 'AP']:
+        results[name] = (result_auc_test[name])
+        # writer.add_scalar(f'Accuracy/Test_{name}',result_auc_test[name], epoch)
+
+    result_acc_test = acc(pos_test_pred, neg_test_pred)
+    results['ACC'] = (result_acc_test)
+    print(results)
+    return results[f'Hits@{100}']
 
   @torch.no_grad()
   def evaluate(self, z, t0, t1):
-    # Activation.
-    if not self.m2_weight.shape[1] == z.shape[1]:  # system has been augmented
-      z = torch.split(z, self.m2_weight.shape[1], dim=1)[0]
-    z = F.relu(z)
-    z = F.linear(z, self.m2_weight, self.m2_bias)
-    if self.dataset == 'ogbn-arxiv':
-      z = z.log_softmax(dim=-1)
-      loss = self.lf(z[self.data.train_mask], self.data.y.squeeze()[self.data.train_mask])
-    else:
-      loss = self.lf(z[self.data.train_mask], self.data.y[self.data.train_mask])
     train_acc, val_acc, test_acc = self.ode_test(z)
-    log = 'ODE eval t0 {:.3f}, t1 {:.3f} Loss: {:.4f}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
+    # log = 'ODE eval t0 {:.3f}, t1 {:.3f} Loss: {:.4f}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     # print(log.format(t0, t1, loss, train_acc, val_acc, tmp_test_acc))
     return train_acc, val_acc, test_acc
-
-  def set_m2(self, m2):
-    self.m2 = copy.deepcopy(m2)
 
   def set_data(self, data):
     if self.data is None:
@@ -337,8 +368,6 @@ class EarlyStopInt(torch.nn.Module):
     self.solver = None
     self.data = None
     self.max_test_steps = opt['max_test_steps']
-    self.m2_weight = None
-    self.m2_bias = None
     self.opt = opt
     self.t = torch.tensor([0, opt['earlystopxT'] * t], dtype=torch.float).to(self.device)
 
@@ -401,8 +430,6 @@ class EarlyStopInt(torch.nn.Module):
     self.solver = SOLVERS[method](func, y0, rtol=rtol, atol=atol, opt=self.opt, splits=splits, predictor=predictor, batch_size=batch_size, **options)
     if self.solver.data is None:
       self.solver.data = self.data
-    # self.solver.m2_weight = self.m2_weight
-    # self.solver.m2_bias = self.m2_bias
     t, solution = self.solver.integrate(t)
     if shapes is not None:
       solution = _flat_to_shape(solution, (len(t),), shapes)

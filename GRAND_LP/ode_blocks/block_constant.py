@@ -1,7 +1,9 @@
-from base_classes import ODEblock
-import torch
-from utils import get_rw_adj, gcn_norm_fill_val
+import os, sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from models.base_classes import ODEblock
+import torch
+from utils.utils import get_rw_adj, gcn_norm_fill_val
 
 class ConstantODEblock(ODEblock):
   def __init__(self, odefunc, regularization_fns, opt, data, device, t=torch.tensor([0, 1])):
@@ -41,29 +43,37 @@ class ConstantODEblock(ODEblock):
 
     func = self.reg_odefunc if self.training and self.nreg > 0 else self.odefunc
     state = (x,) + reg_states if self.training and self.nreg > 0 else x
-
     if self.opt["adjoint"] and self.training:
-      state_dt = integrator(
-        func, state, t,
-        method=self.opt['method'],
-        options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-        adjoint_method=self.opt['adjoint_method'],
-        adjoint_options=dict(step_size = self.opt['adjoint_step_size'], max_iters=self.opt['max_iters']),
-        atol=self.atol,
-        rtol=self.rtol,
-        adjoint_atol=self.atol_adjoint,
-        adjoint_rtol=self.rtol_adjoint)
+        state_dt = integrator(
+          func, state, t,
+          method=self.opt['method'],
+          options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+          adjoint_method=self.opt['adjoint_method'],
+          adjoint_options=dict(step_size=self.opt['adjoint_step_size'], max_iters=self.opt['max_iters']),
+          atol=self.atol,
+          rtol=self.rtol,
+          adjoint_atol=self.atol_adjoint,
+          adjoint_rtol=self.rtol_adjoint)
     else:
-      state_dt = integrator(
-        func, state, t,
-        method=self.opt['method'],
-        options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-        atol=self.atol,
-        rtol=self.rtol,
-        splits=splits,
-        predictor=predictor,
-        batch_size=batch_size)
+        if self.opt["no_early"] == True:
+          state_dt = integrator(
+              func, state, t,
+              method=self.opt['method'],
+              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+              atol=self.atol,
+              rtol=self.rtol)
+        else:
+          state_dt = integrator(
+              func, state, t,
+              method=self.opt['method'],
+              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+              atol=self.atol,
+              rtol=self.rtol,
+              splits=splits,
+              predictor=predictor,
+              batch_size=batch_size)
 
+    
     if self.training and self.nreg > 0:
       z = state_dt[0][1]
       reg_states = tuple( st[1] for st in state_dt[1:] )

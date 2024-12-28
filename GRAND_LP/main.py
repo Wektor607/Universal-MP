@@ -1,17 +1,20 @@
+import os, sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import argparse
 import torch
 import time
 from tqdm import tqdm
 
-from load_lp import *
-from metrics import *
-from graph_rewiring import apply_KNN
-from base_classes import LinkPredictor
-from GNN_KNN import GNN_KNN
-from GNN_KNN_early import GNNKNNEarly
-from GNN import GNN
-from GNN_early import GNNEarly
+from data_utils.load_lp import *
+from data_utils.graph_rewiring import apply_KNN
+from metrics.metrics import *
+from models.base_classes import LinkPredictor
+from models.GNN_KNN import GNN_KNN
+from models.GNN_KNN_early import GNNKNNEarly
+from models.GNN import GNN
+from models.GNN_early import GNNEarly
+from models.trainer import Trainer_GRAND
 from ogb.linkproppred import Evaluator
 from torch.utils.data import DataLoader
 
@@ -23,8 +26,7 @@ best_params_dict = {'Cora': {'M_nodes': 64, 'adaptive': False, 'add_source': Tru
                     'Computers': {'M_nodes': 64, 'adaptive': False, 'add_source': False, 'adjoint': True, 'adjoint_method': 'dopri5', 'adjoint_step_size': 1, 'alpha': 1.0, 'alpha_dim': 'sc', 'att_samp_pct': 0.572918052062338, 'attention_dim': 64, 'attention_norm_idx': 0, 'attention_rewiring': False, 'attention_type': 'scaled_dot', 'augment': False, 'baseline': False, 'batch_norm': False, 'beltrami': False, 'beta_dim': 'sc', 'block': 'hard_attention', 'cpus': 1, 'data_norm': 'rw', 'dataset': 'Computers', 'decay': 0.007674669913252157, 'directional_penalty': None, 'dropout': 0.08732611854459256, 'dt': 0.001, 'dt_min': 1e-05, 'epoch': 100, 'exact': False, 'fc_out': False, 'feat_hidden_dim': 64, 'function': 'laplacian', 'gdc_avg_degree': 64, 'gdc_k': 64, 'gdc_method': 'ppr', 'gdc_sparsification': 'topk', 'gdc_threshold': 0.01, 'gpus': 1.0, 'grace_period': 25, 'heads': 4, 'heat_time': 3.0, 'hidden_dim': 128, 'input_dropout': 0.5973137276937647, 'jacobian_norm2': None, 'kinetic_energy': None, 'label_rate': 0.5, 'leaky_relu_slope': 0.2, 'lr': 0.0035304663972281548, 'max_epochs': 1000, 'max_iters': 100, 'max_nfe': 500, 'method': 'dopri5', 'metric': 'accuracy', 'mix_features': False, 'name': 'computer_beltrami_hard_att1', 'new_edges': 'random', 'no_alpha_sigmoid': False, 'not_lcc': True, 'num_init': 1, 'num_samples': 400, 'num_splits': 2, 'ode_blocks': 1, 'optimizer': 'adam', 'patience': 100, 'pos_enc_hidden_dim': 32, 'pos_enc_orientation': 'row', 'pos_enc_type': 'DW128', 'ppr_alpha': 0.05, 'reduction_factor': 10, 'regularise': False, 'reweight_attention': False, 'rewire_KNN': False, 'rewire_KNN_T': 'T0', 'rewire_KNN_epoch': 10, 'rewire_KNN_k': 64, 'rewire_KNN_sym': False, 'rewiring': None, 'rw_addD': 0.02, 'rw_rmvR': 0.02, 'self_loop_weight': 1.7138583550928912, 'sparsify': 'S_hat', 'square_plus': False, 'step_size': 1, 'threshold_type': 'addD_rvR', 'time': 3.249016177876166, 'tol_scale': 127.46369887079446, 'tol_scale_adjoint': 443.81436775321754, 'total_deriv': None, 'use_cora_defaults': False, 'use_flux': False, 'use_labels': False, 'use_mlp': False},
                     'Photo': {'M_nodes': 64, 'adaptive': False, 'add_source': False, 'adjoint': True, 'adjoint_method': 'rk4', 'adjoint_step_size': 1, 'alpha': 1.0, 'alpha_dim': 'sc', 'att_samp_pct': 0.9282359956104751, 'attention_dim': 64, 'attention_norm_idx': 0, 'attention_rewiring': False, 'attention_type': 'pearson', 'augment': False, 'baseline': False, 'batch_norm': True, 'beltrami': False, 'beta_dim': 'sc', 'block': 'hard_attention', 'cpus': 1, 'data_norm': 'rw', 'dataset': 'Photo', 'decay': 0.004707800883497945, 'directional_penalty': None, 'dropout': 0.46502284638600183, 'dt': 0.001, 'dt_min': 1e-05, 'epoch': 100, 'exact': False, 'fc_out': False, 'feat_hidden_dim': 64, 'function': 'laplacian', 'gdc_avg_degree': 64, 'gdc_k': 64, 'gdc_method': 'ppr', 'gdc_sparsification': 'topk', 'gdc_threshold': 0.01, 'gpus': 1.0, 'grace_period': 25, 'heads': 4, 'heat_time': 3.0, 'hidden_dim': 64, 'input_dropout': 0.42903126506740247, 'jacobian_norm2': None, 'kinetic_energy': None, 'label_rate': 0.5, 'leaky_relu_slope': 0.2, 'lr': 0.005560726683883279, 'max_epochs': 1000, 'max_iters': 100, 'max_nfe': 500, 'method': 'dopri5', 'metric': 'accuracy', 'mix_features': False, 'name': 'photo_beltrami_hard_att1', 'new_edges': 'random', 'no_alpha_sigmoid': False, 'not_lcc': True, 'num_init': 1, 'num_samples': 400, 'num_splits': 2, 'ode_blocks': 1, 'optimizer': 'adam', 'patience': 100, 'pos_enc_hidden_dim': 16, 'pos_enc_orientation': 'row', 'pos_enc_type': 'DW128', 'ppr_alpha': 0.05, 'reduction_factor': 10, 'regularise': False, 'reweight_attention': False, 'rewire_KNN': False, 'rewire_KNN_T': 'T0', 'rewire_KNN_epoch': 10, 'rewire_KNN_k': 64, 'rewire_KNN_sym': False, 'rewiring': None, 'rw_addD': 0.02, 'rw_rmvR': 0.02, 'self_loop_weight': 0.05783612585280118, 'sparsify': 'S_hat', 'square_plus': False, 'step_size': 1, 'threshold_type': 'addD_rvR', 'time': 3.5824027975386623, 'tol_scale': 2086.525473167121, 'tol_scale_adjoint': 14777.606112557354, 'total_deriv': None, 'use_cora_defaults': False, 'use_flux': False, 'use_labels': False, 'use_mlp': False},
                     'ogbn-arxiv': {'M_nodes': 64, 'adaptive': False, 'add_source': False, 'adjoint': True, 'adjoint_method': 'rk4', 'adjoint_step_size': 1, 'alpha': 1.0, 'alpha_dim': 'sc', 'att_samp_pct': 0.8105268910037231, 'attention_dim': 32, 'attention_norm_idx': 0, 'attention_rewiring': False, 'attention_type': 'scaled_dot', 'augment': False, 'baseline': False, 'batch_norm': True, 'beltrami': False, 'beta_dim': 'sc', 'block': 'hard_attention', 'cpus': 1, 'data_norm': 'rw', 'dataset': 'ogbn-arxiv', 'decay': 0, 'directional_penalty': None, 'dropout': 0.11594990901233933, 'dt': 0.001, 'dt_min': 1e-05, 'epoch': 100, 'exact': False, 'fc_out': False, 'feat_hidden_dim': 64, 'function': 'laplacian', 'gdc_avg_degree': 64, 'gdc_k': 64, 'gdc_method': 'ppr', 'gdc_sparsification': 'topk', 'gdc_threshold': 0.01, 'gpus': 1.0, 'grace_period': 20, 'heads': 2, 'heat_time': 3.0, 'hidden_dim': 162, 'input_dropout': 0, 'jacobian_norm2': None, 'kinetic_energy': None, 'label_rate': 0.21964773835397075, 'leaky_relu_slope': 0.2, 'lr': 0.005451476553977102, 'max_epochs': 1000, 'max_iters': 100, 'max_nfe': 500, 'method': 'dopri5', 'metric': 'accuracy', 'mix_features': False, 'name': 'arxiv_beltrami_hard_att', 'new_edges': 'random', 'no_alpha_sigmoid': False, 'not_lcc': False, 'num_init': 2, 'num_samples': 200, 'num_splits': 1, 'ode_blocks': 1, 'optimizer': 'rmsprop', 'patience': 100, 'pos_enc_hidden_dim': 98, 'pos_enc_orientation': 'row', 'pos_enc_type': 'DW64', 'ppr_alpha': 0.05, 'reduction_factor': 10, 'regularise': False, 'reweight_attention': False, 'rewire_KNN': False, 'rewire_KNN_T': 'T0', 'rewire_KNN_epoch': 10, 'rewire_KNN_k': 64, 'rewire_KNN_sym': False, 'rewiring': None, 'rw_addD': 0.02, 'rw_rmvR': 0.02, 'self_loop_weight': 1, 'sparsify': 'S_hat', 'square_plus': False, 'step_size': 1, 'threshold_type': 'addD_rvR', 'time': 3.6760155951687636, 'tol_scale': 11353.558848254957, 'tol_scale_adjoint': 1.0, 'total_deriv': None, 'use_cora_defaults': False, 'use_flux': False, 'use_labels': False, 'use_lcc': True, 'use_mlp': False},
-
-                    'ogbl-collab': {'M_nodes': 64, 'adaptive': False, 'add_source': False, 'adjoint': True, 'adjoint_method': 'rk4', 'adjoint_step_size': 1, 'alpha': 1.0, 'alpha_dim': 'sc', 'att_samp_pct': 0.8105268910037231, 'attention_dim': 32, 'attention_norm_idx': 0, 'attention_rewiring': False, 'attention_type': 'scaled_dot', 'augment': False, 'baseline': False, 'batch_norm': True, 'beltrami': False, 'beta_dim': 'sc', 'block': 'hard_attention', 'cpus': 1, 'data_norm': 'rw', 'dataset': 'ogbl-collab', 'decay': 0, 'directional_penalty': None, 'dropout': 0.11594990901233933, 'dt': 0.001, 'dt_min': 1e-05, 'epoch': 100, 'exact': False, 'fc_out': False, 'feat_hidden_dim': 64, 'function': 'laplacian', 'gdc_avg_degree': 64, 'gdc_k': 64, 'gdc_method': 'ppr', 'gdc_sparsification': 'threshold', 'gdc_threshold': 0.01, 'gpus': 1.0, 'grace_period': 20, 'heads': 2, 'heat_time': 3.0, 'hidden_dim': 162, 'input_dropout': 0, 'jacobian_norm2': None, 'kinetic_energy': None, 'label_rate': 0.21964773835397075, 'leaky_relu_slope': 0.2, 'lr': 0.005451476553977102, 'max_epochs': 1000, 'max_iters': 100, 'max_nfe': 500, 'method': 'dopri5', 'metric': 'accuracy', 'mix_features': False, 'name': 'arxiv_beltrami_hard_att', 'new_edges': 'random', 'no_alpha_sigmoid': False, 'not_lcc': False, 'num_init': 2, 'num_samples': 200, 'num_splits': 1, 'ode_blocks': 1, 'optimizer': 'rmsprop', 'patience': 100, 'pos_enc_hidden_dim': 98, 'pos_enc_orientation': 'row', 'pos_enc_type': 'DW64', 'ppr_alpha': 0.05, 'reduction_factor': 10, 'regularise': False, 'reweight_attention': False, 'rewire_KNN': False, 'rewire_KNN_T': 'T0', 'rewire_KNN_epoch': 10, 'rewire_KNN_k': 64, 'rewire_KNN_sym': False, 'rewiring': 'gdc', 'rw_addD': 0.02, 'rw_rmvR': 0.02, 'self_loop_weight': 1, 'sparsify': 'S_hat', 'square_plus': False, 'step_size': 1, 'threshold_type': 'addD_rvR', 'time': 3.6760155951687636, 'tol_scale': 11353.558848254957, 'tol_scale_adjoint': 1.0, 'total_deriv': None, 'use_cora_defaults': False, 'use_flux': False, 'use_labels': False, 'use_lcc': True, 'use_mlp': False}
+                    'ogbl-collab': {'M_nodes': 64, 'adaptive': False, 'add_source': False, 'adjoint': True, 'adjoint_method': 'rk4', 'adjoint_step_size': 1, 'alpha': 1.0, 'alpha_dim': 'sc', 'att_samp_pct': 0.8105268910037231, 'attention_dim': 32, 'attention_norm_idx': 0, 'attention_rewiring': False, 'attention_type': 'scaled_dot', 'augment': False, 'baseline': False, 'batch_norm': True, 'beltrami': False, 'beta_dim': 'sc', 'block': 'constant', 'cpus': 1, 'data_norm': 'rw', 'dataset': 'ogbl-collab', 'decay': 0, 'directional_penalty': None, 'dropout': 0.11594990901233933, 'dt': 0.001, 'dt_min': 1e-05, 'epoch': 100, 'exact': False, 'fc_out': False, 'feat_hidden_dim': 64, 'function': 'laplacian', 'gdc_avg_degree': 64, 'gdc_k': 64, 'gdc_method': 'ppr', 'gdc_sparsification': 'threshold', 'gdc_threshold': 0.01, 'gpus': 1.0, 'grace_period': 20, 'heads': 2, 'heat_time': 3.0, 'hidden_dim': 162, 'input_dropout': 0, 'jacobian_norm2': None, 'kinetic_energy': None, 'label_rate': 0.21964773835397075, 'leaky_relu_slope': 0.2, 'lr': 0.005451476553977102, 'max_epochs': 1000, 'max_iters': 100, 'max_nfe': 500, 'method': 'rk4', 'metric': 'accuracy', 'mix_features': False, 'name': 'arxiv_beltrami_hard_att', 'new_edges': 'random', 'no_alpha_sigmoid': False, 'not_lcc': False, 'num_init': 2, 'num_samples': 200, 'num_splits': 1, 'ode_blocks': 1, 'optimizer': 'rmsprop', 'patience': 100, 'pos_enc_hidden_dim': 98, 'pos_enc_orientation': 'row', 'pos_enc_type': 'DW64', 'ppr_alpha': 0.05, 'reduction_factor': 10, 'regularise': False, 'reweight_attention': False, 'rewire_KNN': True, 'rewire_KNN_T': 'T0', 'rewire_KNN_epoch': 10, 'rewire_KNN_k': 64, 'rewire_KNN_sym': False, 'rewiring': True, 'rw_addD': 0.02, 'rw_rmvR': 0.02, 'self_loop_weight': 1, 'sparsify': 'S_hat', 'square_plus': False, 'step_size': 1, 'threshold_type': 'addD_rvR', 'time': 3.6760155951687636, 'tol_scale': 11353.558848254957, 'tol_scale_adjoint': 1.0, 'total_deriv': None, 'use_cora_defaults': False, 'use_flux': False, 'use_labels': False, 'use_lcc': True, 'use_mlp': False}
                     }
 
 def str2bool(v):
@@ -36,6 +38,7 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+      
 def merge_cmd_args(cmd_opt, opt):
   if cmd_opt['beltrami']:
     opt['beltrami'] = True
@@ -59,6 +62,8 @@ def merge_cmd_args(cmd_opt, opt):
     opt['not_lcc'] = False
   if cmd_opt['num_splits'] != 1:
     opt['num_splits'] = cmd_opt['num_splits']
+  
+  return opt
 
 def get_optimizer(name, parameters, lr, weight_decay=0):
   if name == 'sgd':
@@ -81,192 +86,6 @@ def print_model_params(model):
       print(name)
       print(param.data.shape)
       
-@torch.no_grad()
-def test_OGB(model, predictor, pos_encoding, data, splits, opt):
-  batch_size = opt['batch_size']
-  
-  if opt['dataset'] == 'ogbn-arxiv':
-    name = 'ogbn-arxiv'
-  elif opt['dataset'] == 'ogbl-collab':
-    name = 'ogbl-collab'
-
-  evaluator = Evaluator(name=name)
-  model.eval()
-  h = model(data.x, pos_encoding)
-  
-  pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
-  neg_train_edge = splits['train']['neg_edge_label_index'].to(data.x.device)
-  pos_valid_edge = splits['valid']['pos_edge_label_index'].to(data.x.device)
-  neg_valid_edge = splits['valid']['neg_edge_label_index'].to(data.x.device)
-  pos_test_edge = splits['test']['pos_edge_label_index'].to(data.x.device)
-  neg_test_edge = splits['test']['neg_edge_label_index'].to(data.x.device)
-  
-  pos_train_preds = []
-  for perm in DataLoader(range(pos_train_edge.size(1)), batch_size):
-      edge = pos_train_edge[:, perm]#.t()
-      pos_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-  pos_train_pred = torch.cat(pos_train_preds, dim=0)
-
-  neg_train_preds = []
-  for perm in DataLoader(range(neg_train_edge.size(1)), batch_size):
-      edge = neg_train_edge[:, perm]#.t()
-      neg_train_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-  neg_train_pred = torch.cat(neg_train_preds, dim=0)
-
-  pos_valid_preds = []
-  for perm in DataLoader(range(pos_valid_edge.size(1)), batch_size):
-      edge = pos_valid_edge[:, perm]#.t()
-      pos_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-  pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
-
-  neg_valid_preds = []
-  for perm in DataLoader(range(neg_valid_edge.size(1)), batch_size):
-      edge = neg_valid_edge[:, perm]#.t()
-      neg_valid_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-  neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
-
-  pos_test_preds = []
-  for perm in DataLoader(range(pos_test_edge.size(1)), batch_size):
-      edge = pos_test_edge[:, perm]#.t()
-      pos_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-  pos_test_pred = torch.cat(pos_test_preds, dim=0)
-
-  neg_test_preds = []
-  for perm in DataLoader(range(neg_test_edge.size(1)), batch_size):
-      edge = neg_test_edge[:, perm]#.t()
-      neg_test_preds += [predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-  neg_test_pred = torch.cat(neg_test_preds, dim=0)
-
-  results = {}
-  for K in [1, 3, 10, 20, 50, 100]:
-      evaluator.K = K
-      train_hits = evaluator.eval({
-          'y_pred_pos': pos_train_pred,
-          'y_pred_neg': neg_train_pred,
-      })[f'hits@{K}']
-      valid_hits = evaluator.eval({
-          'y_pred_pos': pos_valid_pred,
-          'y_pred_neg': neg_valid_pred,
-      })[f'hits@{K}']
-      test_hits = evaluator.eval({
-          'y_pred_pos': pos_test_pred,
-          'y_pred_neg': neg_test_pred,
-      })[f'hits@{K}']
-
-      results[f'Hits@{K}'] = (train_hits, valid_hits, test_hits)
-
-      # # Log the hits@K values
-      # writer.add_scalar(f'Accuracy/Train_Hits@{K}', train_hits, epoch)
-      # writer.add_scalar(f'Accuracy/Valid_Hits@{K}', valid_hits, epoch)
-      # writer.add_scalar(f'Accuracy/Test_Hits@{K}', test_hits, epoch)
-  
-  print(f"Shape of pos_val_pred: {pos_test_pred.shape}")
-  print(f"Shape of neg_val_pred: {neg_test_pred.shape}")
-
-  result_mrr_test = evaluate_mrr(pos_test_pred, neg_test_pred)  
-  
-  for name in ['MRR', 'mrr_hit1', 'mrr_hit3', 'mrr_hit10', 'mrr_hit20', 'mrr_hit50', 'mrr_hit100']:
-      results[name] = (result_mrr_test[name])
-      # writer.add_scalar(f'Accuracy/Test_{name}', result_mrr_test[name], epoch)
-  
-  test_pred = torch.cat([pos_test_pred, neg_test_pred])
-  test_true = torch.cat([torch.ones(pos_test_pred.size(0), dtype=int), 
-                          torch.zeros(neg_test_pred.size(0), dtype=int)])
-  
-  result_auc_test = evaluate_auc(test_pred, test_true)
-  for name in ['AUC', 'AP']:
-      results[name] = (result_auc_test[name])
-      # writer.add_scalar(f'Accuracy/Test_{name}',result_auc_test[name], epoch)
-
-  result_acc_test = acc(pos_test_pred, neg_test_pred)
-  results['ACC'] = (result_acc_test)
-  # writer.add_scalar(f'Accuracy/Test_ACC',result_acc_test, epoch)
-  
-  return results
-
-def train(model, predictor, pos_encoding, data, splits, optimizer, batch_size):
-    predictor.train()
-    model.train()
-    
-    pos_encoding = pos_encoding.to(model.device) if pos_encoding is not None else None
-    
-    pos_train_edge = splits['train']['pos_edge_label_index'].to(data.x.device)
-    neg_train_edge = splits['train']['neg_edge_label_index'].to(data.x.device)
-    
-    total_loss = 0
-    data_loader = DataLoader(range(pos_train_edge.size(1)), batch_size, shuffle=True)
-    
-    with tqdm(data_loader, desc="Training Progress", unit="batch") as pbar:
-        for perm in pbar:
-            optimizer.zero_grad()
-            h = model(data.x, pos_encoding)
-            
-            edge = pos_train_edge[:, perm]
-            pos_out = predictor(h[edge[0]], h[edge[1]])
-            pos_loss = -torch.log(pos_out + 1e-15).mean()
-        
-            edge = neg_train_edge[:, perm]
-            neg_out = predictor(h[edge[0]], h[edge[1]])
-            neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
-        
-            loss = pos_loss + neg_loss
-            
-            if model.odeblock.nreg > 0:
-                reg_states = tuple(torch.mean(rs) for rs in model.reg_states)
-                regularization_coeffs = model.regularization_coeffs
-
-                reg_loss = sum(
-                    reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
-                )
-                loss = loss + reg_loss
-
-            # Update parameters
-            model.fm.update(model.getNFE())
-            model.resetNFE()
-            loss.backward()
-            optimizer.step()
-            model.bm.update(model.getNFE())
-            model.resetNFE()
-            
-            total_loss += loss.item()
-            # Update progress bar description with current loss
-            pbar.set_postfix({"Loss": loss.item()})
-    
-    return total_loss
-
-def grand_dataset(data, splits, opt):
-    edge_index = data.edge_index
-    data.num_nodes = data.x.shape[0]
-    # data.edge_weight = None
-    data.adj_t = SparseTensor.from_edge_index(edge_index, sparse_sizes=(data.num_nodes, data.num_nodes))
-    data.adj_t = data.adj_t.to_symmetric().coalesce()
-    # data.max_x = -1
-    # Use training + validation edges for inference on test set.
-    if opt['use_valedges_as_input']:
-        val_edge_index = splits['valid']['pos_edge_label_index']
-        full_edge_index = torch.cat([edge_index, val_edge_index], dim=-1)
-        data.full_adj_t = SparseTensor.from_edge_index(full_edge_index, sparse_sizes=(data.num_nodes, data.num_nodes)).coalesce()
-        data.full_adj_t = data.full_adj_t.to_symmetric()
-    else:
-        data.full_adj_t = data.adj_t
-    return data
-  
-def random_sampling(splits, scale: float):
-    print(f"train adj shape: {splits['train'].edge_index.shape[1]}")
-
-    for k, data in splits.items():
-        if k!='train':
-            print(f"{k}: original length {data.pos_edge_label_index.shape[1]}")
-            num_samples = int(data.neg_edge_label_index.shape[1] * scale)
-            sampled_indices = np.random.choice(data.neg_edge_label_index.shape[1], num_samples, replace=False)
-            data.pos_edge_label_index = data.pos_edge_label_index[:, sampled_indices]
-            data.neg_edge_label_index = data.neg_edge_label_index[:, sampled_indices]
-            data.neg_edge_label = data.neg_edge_label[sampled_indices]
-            data.pos_edge_label = data.pos_edge_label[sampled_indices]
-            print(f"{k}: downsampled length {data.pos_edge_label_index.shape[1]}")
-
-    return splits
-  
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')
     ### MPLP PARAMETERS ###
@@ -477,7 +296,7 @@ if __name__=='__main__':
 
     # MY PARAMETERS
     parser.add_argument('--mlp_num_layers', type=int, default=3, help="Number of layers in MLP")
-    parser.add_argument('--batch_size', type=int, default=2048)
+    parser.add_argument('--batch_size', type=int, default=2**12)
     
     args = parser.parse_args()
     
@@ -485,12 +304,13 @@ if __name__=='__main__':
     try:
         best_opt = best_params_dict[cmd_opt['dataset']]
         opt = {**cmd_opt, **best_opt}
-        merge_cmd_args(cmd_opt, opt)
+        # opt = merge_cmd_args(cmd_opt, opt)
     except KeyError:
         opt = cmd_opt
     
     data, splits = get_dataset(opt['dataset_dir'], opt['dataset'], opt, opt['use_valedges_as_input'], opt['year'])
-      
+    
+    
     if args.dataset == "ogbl-citation2":
         opt['metric'] = "MRR"
     if data.x is None:
@@ -499,15 +319,11 @@ if __name__=='__main__':
     if args.print_summary:
         data_summary(args.dataset, data, header='header' in args.print_summary, latex='latex' in args.print_summary);exit(0)
     else:
-        print(args)
+        print(opt)
     
     device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
-    
-    # splits = random_sampling(splits, 0.1)
 
-    # data.edge_index = splits['train']['pos_edge_label_index']
-    # data = grand_dataset(data, splits, opt).to(device)
     data = data.to(device)
     if opt['beltrami']:
       pos_encoding = apply_beltrami(data, opt).to(device)
@@ -524,44 +340,24 @@ if __name__=='__main__':
       model = GNN(opt, data, splits, predictor, batch_size, device).to(device) if opt["no_early"] else GNNEarly(opt, data, splits, predictor, batch_size, device).to(device)
 
     parameters = [p for p in model.parameters() if p.requires_grad]
-    # print_model_params(model)
     optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
-    best_time = best_epoch = train_acc = val_acc = test_acc = 0
+    
+    trainer = Trainer_GRAND(
+        opt=opt,
+        model=model,
+        predictor=predictor,
+        optimizer=optimizer,
+        data=data,
+        pos_encoding=pos_encoding,
+        splits=splits,
+        batch_size=batch_size,
+        device=device,
+        log_dir='./logs'
+    )
 
-    this_test = test_OGB #if opt['dataset'] == 'ogbn-arxiv' else test
-  
-    for epoch in range(1, opt['epoch']):
-      start_time = time.time()
+    # Start training
+    best_results = trainer.train()
 
-      if opt['rewire_KNN'] and epoch % opt['rewire_KNN_epoch'] == 0 and epoch != 0:
-        ei = apply_KNN(data, pos_encoding, model, opt)
-        model.odeblock.odefunc.edge_index = ei
+    # Finalize and display results
+    trainer.finalize()
 
-      loss = train(model, predictor, pos_encoding, data, splits, optimizer, opt['batch_size'])
-      print(f'Loss Epoch {epoch}: ', loss)
-      # if epoch % 1 == 0:
-      results = this_test(model, predictor, pos_encoding, data, splits, opt)
-
-      best_time = opt['time']
-      # if tmp_val_acc > val_acc:
-      #   best_epoch = epoch
-      #   train_acc = tmp_train_acc
-      #   val_acc = tmp_val_acc
-      #   test_acc = tmp_test_acc
-      #   best_time = opt['time']
-      # if not opt['no_early'] and model.odeblock.test_integrator.solver.best_val > val_acc:
-      #   best_epoch = epoch
-      #   val_acc = model.odeblock.test_integrator.solver.best_val
-      #   test_acc = model.odeblock.test_integrator.solver.best_test
-      #   train_acc = model.odeblock.test_integrator.solver.best_train
-      #   best_time = model.odeblock.test_integrator.solver.best_time
-
-      # log = 'Epoch: {:03d}, Runtime {:03f}, Loss {:03f}, forward nfe {:d}, backward nfe {:d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}, Best time: {:.4f}'
-      log = 'Epoch: {:03d}, Runtime {:03f}, Loss {:03f}, forward nfe {:d}, backward nfe {:d}, Best time: {:.4f}, Results: {}'
-
-      print(log.format(epoch, time.time() - start_time, loss, model.fm.sum, model.bm.sum, best_time, results))
-      
-  
-    print('best val accuracy {:03f} with test accuracy {:03f} at epoch {:d} and best time {:03f}'.format(val_acc, test_acc,
-                                                                                                      best_epoch,                                                                                               best_time))
-    print(train_acc, val_acc, test_acc)

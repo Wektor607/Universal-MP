@@ -1,8 +1,11 @@
+import os, sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 from torch import nn
-from function_transformer_attention import SpGraphTransAttentionLayer
-from base_classes import ODEblock
-from utils import get_rw_adj
+from ode_functions.function_transformer_attention import SpGraphTransAttentionLayer
+from models.base_classes import ODEblock
+from utils.utils import get_rw_adj
 
 
 class MixedODEblock(ODEblock):
@@ -41,29 +44,39 @@ class MixedODEblock(ODEblock):
     mixed_attention = attention.mean(dim=1) * (1 - gamma) + self.odefunc.edge_weight * gamma
     return mixed_attention
 
-  def forward(self, x):
+  def forward(self, x, splits, predictor, batch_size):
     t = self.t.type_as(x)
     self.odefunc.attention_weights = self.get_mixed_attention(x)
     integrator = self.train_integrator if self.training else self.test_integrator
     if self.opt["adjoint"] and self.training:
-      z = integrator(
-        self.odefunc, x, t,
-        method=self.opt['method'],
-        options={'step_size': self.opt['step_size']},
-        adjoint_method=self.opt['adjoint_method'],
-        adjoint_options={'step_size': self.opt['adjoint_step_size']},
-        atol=self.atol,
-        rtol=self.rtol,
-        adjoint_atol=self.atol_adjoint,
-        adjoint_rtol=self.rtol_adjoint)[1]
+        z = integrator(
+          self.odefunc, x, t,
+          method=self.opt['method'],
+          options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+          adjoint_method=self.opt['adjoint_method'],
+          adjoint_options=dict(step_size=self.opt['adjoint_step_size'], max_iters=self.opt['max_iters']),
+          atol=self.atol,
+          rtol=self.rtol,
+          adjoint_atol=self.atol_adjoint,
+          adjoint_rtol=self.rtol_adjoint)
     else:
-      z = integrator(
-        self.odefunc, x, t,
-        method=self.opt['method'],
-        options={'step_size': self.opt['step_size']},
-        atol=self.atol,
-        rtol=self.rtol)[1]
-
+        if self.opt["no_early"] == True:
+          z = integrator(
+              self.odefunc, x, t,
+              method=self.opt['method'],
+              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+              atol=self.atol,
+              rtol=self.rtol)
+        else:
+          z = integrator(
+              self.odefunc, x, t,
+              method=self.opt['method'],
+              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+              atol=self.atol,
+              rtol=self.rtol,
+              splits=splits,
+              predictor=predictor,
+              batch_size=batch_size)
     return z
 
   def __repr__(self):
