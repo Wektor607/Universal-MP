@@ -36,7 +36,7 @@ class AttODEblock(ODEblock):
     attention, values = self.multihead_att_layer(x, self.odefunc.edge_index)
     return attention
 
-  def forward(self, x, splits, predictor, batch_size):
+  def forward(self, x):
     t = self.t.type_as(x)
     self.odefunc.attention_weights = self.get_attention_weights(x)
     self.reg_odefunc.odefunc.attention_weights = self.odefunc.attention_weights
@@ -59,23 +59,12 @@ class AttODEblock(ODEblock):
           adjoint_atol=self.atol_adjoint,
           adjoint_rtol=self.rtol_adjoint)
     else:
-        if self.opt["no_early"] == True:
-          state_dt = integrator(
-              func, state, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol)
-        else:
-          state_dt = integrator(
-              func, state, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol,
-              splits=splits,
-              predictor=predictor,
-              batch_size=batch_size)
+        state_dt = integrator(
+          func, state, t,
+          method=self.opt['method'],
+          options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+          atol=self.atol,
+          rtol=self.rtol)
 
     if self.training and self.nreg > 0:
       z = state_dt[0][1]

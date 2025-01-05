@@ -16,7 +16,7 @@ from torch_geometric.transforms import (BaseTransform, Compose, ToSparseTensor,
                                         ToDevice, ToUndirected)
 from torch_geometric.data.collate import collate
 import scipy.io as sio
-from torch_geometric.data import Data
+from torch_geometric.data import Data, InMemoryDataset
 from torch_geometric.transforms.two_hop import TwoHop
 from metrics.distances_kNN import apply_dist_KNN, apply_dist_threshold, get_distances, apply_feat_KNN
 from metrics.hyperbolic_distances import hyperbolize
@@ -24,55 +24,70 @@ from torch_geometric.transforms import GDC
 from torch_geometric.utils import add_self_loops, is_undirected, to_dense_adj, \
   dense_to_sparse, to_undirected
 import torch_geometric.transforms as T
+from torch_geometric.nn import Node2Vec
 from typing import Union
+import ast
+from data_utils.lcc import *
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1):
+CLUSTER_FILENAME = f"{ROOT_DIR}/data/ddi_features/clustering.txt"
+PAGERANK_FILENAME = f"{ROOT_DIR}/data/ddi_features/pagerank.txt"
+DEGREE_FILENAME = f"{ROOT_DIR}/data/ddi_features/degree.pkl"
+CENTRALITY_FILENAME = f"{ROOT_DIR}/data/ddi_features/centrality.pkl"
+
+def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, device='cpu', year=-1):
     if name.startswith('ogbl-'):
         dataset = PygLinkPropPredDataset(name=name, root=root)
-        data = dataset[0]
-        """
-            SparseTensor's value is NxNx1 for collab. due to edge_weight is |E|x1
-            NeuralNeighborCompletion just set edge_weight=None
-            ELPH use edge_weight
-        """
-        
-        split_edge = get_edge_split(data,
-                                True,
-                                opt['device'],
-                                0.15,#opt.split_index[1],
-                                0.05,#opt.split_index[2],
-                                True,#opt.include_negatives,
-                                True)#opt.split_labels)
 
-        if name == 'ogbl-collab' and year > 0:  # filter out training edges before args.year
+        data = dataset[0]
+
+        # Idea from original repo: https://github.com/chuanqichen/cs224w/blob/main/ddi/gnn_augmented_node2vec.py
+        if name == 'ogbl-ddi':
+          data.x = get_features(data.num_nodes)
+          emb = Node2Vec(data.edge_index, opt['hidden_dim'] - data.x.size(1), walk_length=20,
+                      context_size=10, walks_per_node=10)
+          embeddings = emb()
+
+          data.x = torch.cat([data.x.to(device), embeddings.to(device)], dim=1)
+          dataset.data = data
+        else:
+          emb = None
+        
+        if data.x is not None:
+          data.x = data.x.to(torch.float)
+        # TODO: CHECK (VERY LONGG)
+        # if opt['use_lcc']:
+        #   data, lcc, _ = use_lcc(data)
+        #   dataset.data = data
+          # print(data.x.shape, data.edge_index.shape)
+          # lcc = get_largest_connected_component(dataset)
+
+          # data.x = data.x[lcc]
+
+          # row, col = dataset.data.edge_index.numpy()
+          # edges = [[i, j] for i, j in zip(row, col) if i in lcc and j in lcc]
+          # data.edge_index = torch.tensor(remap_edges(edges, get_node_mapper(lcc)))
+          # print(data.x.shape, data.edge_index.shape)
+        
+        split_edge = dataset.get_edge_split()
+
+        if name == 'ogbl-collab' and year > 0:
             data, split_edge = filter_by_year(data, split_edge, year)
+        
         if name == 'ogbl-vessel':
-            # normalize x,y,z coordinates  
             data.x[:, 0] = torch.nn.functional.normalize(data.x[:, 0], dim=0)
             data.x[:, 1] = torch.nn.functional.normalize(data.x[:, 1], dim=0)
             data.x[:, 2] = torch.nn.functional.normalize(data.x[:, 2], dim=0)
+          
         if 'edge_weight' in data:
             data.edge_weight = data.edge_weight.view(-1).to(torch.float)
-            # TEMP FIX: ogbl-collab has directed edges. adj_t.to_symmetric will
-            # double the edge weight. temporary fix like this to avoid too dense graph.
             if name == "ogbl-collab":
                 data.edge_weight = data.edge_weight / 2
 
-        if 'edge_index' in split_edge['train']:
-            key = 'edge_index'
-        else:
-            key = 'source_node'
-        print("-"*20)
-        print(f"train: {split_edge['train'][key].shape[0]}")
-        print(f"{split_edge['train'][key]}")
-        print(f"valid: {split_edge['valid'][key].shape[0]}")
-        print(f"test: {split_edge['test'][key].shape[0]}")
-        print(f"max_degree:{degree(data.edge_index[0], data.num_nodes).max()}")
         data = ToSparseTensor(remove_edge_index=False)(data)
         data.adj_t = data.adj_t.to_symmetric()
-        # Use training + validation edges for inference on test set.
+
         if use_valedges_as_input:
             val_edge_index = split_edge['valid']['edge_index'].t()
             full_edge_index = torch.cat([data.edge_index, val_edge_index], dim=-1)
@@ -86,16 +101,11 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
             data.full_adj_t = data.adj_t
             if opt['rewiring'] is not None:
                 data = rewire(data, opt, root)
-        # make node feature as float
-        if data.x is not None:
-            data.x = data.x.to(torch.float)
-        # Normalization
-        data.x = (data.x - data.x.mean(dim=0)) / data.x.std(dim=0)
-            
-        # I comment it, because we need it for models
-        # if name != 'ogbl-ddi':
-        #     del data.edge_index
-        return data, split_edge
+        
+        # if name != 'ogbl-ddi':    
+        #   data.x = (data.x - data.x.mean(dim=0)) / data.x.std(dim=0)
+        print(data)
+        return data, split_edge, emb
 
     pyg_dataset_dict = {
         'Cora': (datasets.Planetoid, {'name':'Cora'}),
@@ -106,13 +116,7 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
         'Computers': (datasets.Amazon, {'name':'Computers'}),
         'Photo': (datasets.Amazon, {'name':'Photo'}),
         'PolBlogs': (datasets.PolBlogs, {}),
-        # 'musae-twitch':(SNAPDataset, {'name':'musae-twitch'}),
-        # 'musae-github':(SNAPDataset, {'name':'musae-github'}),
-        # 'musae-facebook':(SNAPDataset, {'name':'musae-facebook'}),
-        # 'syn-TRIANGULAR':(SyntheticDataset, {'name':'TRIANGULAR'}),
-        # 'syn-GRID':(SyntheticDataset, {'name':'GRID'}),
     }
-    # assert name in pyg_dataset_dict, "Dataset must be in {}".format(list(pyg_dataset_dict.keys()))
 
     if name in pyg_dataset_dict:
         dataset_class, kwargs = pyg_dataset_dict[name]
@@ -130,6 +134,86 @@ def get_dataset(root, name: str, opt: dict, use_valedges_as_input=False, year=-1
         data = rewire(data, opt, root)
     
     return data, None
+
+def get_node_mapper(lcc: np.ndarray) -> dict:
+  mapper = {}
+  counter = 0
+  for node in lcc:
+    mapper[node] = counter
+    counter += 1
+  return mapper
+
+def remap_edges(edges: list, mapper: dict) -> list:
+  row = [e[0] for e in edges]
+  col = [e[1] for e in edges]
+  row = list(map(lambda x: mapper[x], row))
+  col = list(map(lambda x: mapper[x], col))
+  return [row, col]
+
+def get_largest_connected_component(dataset: InMemoryDataset) -> np.ndarray:
+  remaining_nodes = set(range(dataset.data.x.shape[0]))
+  comps = []
+  while remaining_nodes:
+    start = min(remaining_nodes)
+    comp = get_component(dataset, start)
+    comps.append(comp)
+    remaining_nodes = remaining_nodes.difference(comp)
+  return np.array(list(comps[np.argmax(list(map(len, comps)))]))
+
+def get_component(dataset: InMemoryDataset, start: int = 0) -> set:
+  visited_nodes = set()
+  queued_nodes = set([start])
+  row, col = dataset.data.edge_index.numpy()
+  while queued_nodes:
+    current_node = queued_nodes.pop()
+    visited_nodes.update([current_node])
+    neighbors = col[np.where(row == current_node)[0]]
+    neighbors = [n for n in neighbors if n not in visited_nodes and n not in queued_nodes]
+    queued_nodes.update(neighbors)
+  return visited_nodes
+
+from collections import Counter
+# For ogbl-ddi
+def get_features(n_nodes):
+    with open(PAGERANK_FILENAME, "r") as f:
+        contents = f.read()
+        pagerank_dict = ast.literal_eval(contents)
+    pagerank_vals = torch.FloatTensor(list(pagerank_dict.values())).reshape((n_nodes, 1))
+    
+    # pagerank_vals = (pagerank_vals - pagerank_vals.mean()) / pagerank_vals.std() 
+    
+    with open(CLUSTER_FILENAME, "r") as f:
+        contents = f.read()
+        clustering_dict = ast.literal_eval(contents)
+    cluster_vals = torch.FloatTensor(list(clustering_dict.values())).reshape((n_nodes, 1))
+    
+    # cluster_vals = (cluster_vals - cluster_vals.mean()) / cluster_vals.std()
+    # # ERROR
+    # with open(DEGREE_FILENAME, "rb") as f:
+    #     degree_dict = pickle.load(f)
+    # print(list(degree_dict.values()))
+    # # degree_vals = torch.FloatTensor(list(degree_dict.values())).reshape((n_nodes, 1))
+    # # My:
+    # degree_vals = torch.FloatTensor([
+    #   sum(counter.values()) / len(counter.values()) if isinstance(counter, Counter) and len(counter) > 0 else 0
+    #   for counter in degree_dict.values()
+    # ]).reshape((n_nodes, 1))
+
+    # print(degree_vals)
+    # raise(0)
+    # with open(CENTRALITY_FILENAME, "rb") as f:
+    #     centrality_dict = pickle.load(f)
+    # # centrality_vals = torch.FloatTensor(list(centrality_dict.values())).reshape((n_nodes, 1))
+    # centrality_vals = [
+    #     sum(v.values()) / len(v) if isinstance(v, dict) and len(v) > 0 else 0
+    #     for v in centrality_dict.values()
+    # ]
+    # print(centrality_vals)
+    # raise(0)
+    ones = torch.ones((n_nodes, 1))
+    # features = torch.cat((ones, pagerank_vals, cluster_vals, centrality_vals, degree_vals), 1)
+    features = torch.cat((ones, pagerank_vals, cluster_vals, cluster_vals, cluster_vals), 1)
+    return features
 
 def get_edge_split(data: Data,
                    undirected: bool,

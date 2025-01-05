@@ -48,7 +48,8 @@ class HardAttODEblock(ODEblock):
     att_sums = scatter(attention, index, dim=0, dim_size=self.num_nodes, reduce='sum')[index]
     return attention / (att_sums + 1e-16)
 
-  def forward(self, x, splits, predictor, batch_size):
+  
+  def forward(self, x):
     t = self.t.type_as(x)
     attention_weights = self.get_attention_weights(x)
     # create attention mask
@@ -90,23 +91,12 @@ class HardAttODEblock(ODEblock):
           adjoint_atol=self.atol_adjoint,
           adjoint_rtol=self.rtol_adjoint)
     else:
-        if self.opt["no_early"] == True:
-          state_dt = integrator(
-              func, state, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol)
-        else:
-          state_dt = integrator(
-              func, state, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol,
-              splits=splits,
-              predictor=predictor,
-              batch_size=batch_size)
+        state_dt = integrator(
+            func, state, t,
+            method=self.opt['method'],
+            options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+            atol=self.atol,
+            rtol=self.rtol)
 
     if self.training and self.nreg > 0:
       z = state_dt[0][1]

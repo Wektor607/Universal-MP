@@ -58,7 +58,7 @@ class GNN_KNN(BaseGNN):
     if self.training and self.odeblock.nreg > 0:
       z, self.reg_states = self.odeblock(x)
     else:
-      z = self.odeblock(x, self.splits, self.predictor, self.batch_size)
+      z = self.odeblock(x)
 
     if self.opt['fa_layer']:
       temp_time = self.opt['time']

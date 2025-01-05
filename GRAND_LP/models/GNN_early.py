@@ -26,7 +26,7 @@ class GNNEarly(BaseGNN):
     self.odeblock = block(self.f, self.regularization_fns, opt, data, device, t=time_tensor).to(device)
     # overwrite the test integrator with this custom one
     with torch.no_grad():
-      self.odeblock.test_integrator = EarlyStopInt(self.T, self.opt, self.device)
+      self.odeblock.test_integrator = EarlyStopInt(self.T, self.opt, self.device, self.splits, self.predictor, self.batch_size)
       self.set_solver_data(data)
 
   def set_solver_data(self, data):
@@ -66,10 +66,11 @@ class GNNEarly(BaseGNN):
     self.odeblock.set_x0(x)
 
     if self.training and self.odeblock.nreg > 0:
-      z, self.reg_states  = self.odeblock(x)
+      z, self.reg_states = self.odeblock(x)
     else:
-      z = self.odeblock(x, self.splits, self.predictor, self.batch_size)
-      
+      z = self.odeblock(x)
+    # print('x: ', x.shape)
+    # print('Z: ', z.shape)
     if self.opt['augment']:
       z = torch.split(z, x.shape[1] // 2, dim=1)[0]
 

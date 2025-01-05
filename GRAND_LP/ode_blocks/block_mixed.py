@@ -44,7 +44,7 @@ class MixedODEblock(ODEblock):
     mixed_attention = attention.mean(dim=1) * (1 - gamma) + self.odefunc.edge_weight * gamma
     return mixed_attention
 
-  def forward(self, x, splits, predictor, batch_size):
+  def forward(self, x):
     t = self.t.type_as(x)
     self.odefunc.attention_weights = self.get_mixed_attention(x)
     integrator = self.train_integrator if self.training else self.test_integrator
@@ -60,23 +60,12 @@ class MixedODEblock(ODEblock):
           adjoint_atol=self.atol_adjoint,
           adjoint_rtol=self.rtol_adjoint)
     else:
-        if self.opt["no_early"] == True:
-          z = integrator(
-              self.odefunc, x, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol)
-        else:
-          z = integrator(
-              self.odefunc, x, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol,
-              splits=splits,
-              predictor=predictor,
-              batch_size=batch_size)
+        z = integrator(
+            self.odefunc, x, t,
+            method=self.opt['method'],
+            options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+            atol=self.atol,
+            rtol=self.rtol)
     return z
 
   def __repr__(self):

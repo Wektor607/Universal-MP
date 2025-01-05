@@ -185,7 +185,7 @@ class RewireAttODEblock(ODEblock):
     self.odefunc.edge_weight = sampled_attention_weights #rewiring structure so need to replace any preproc ew's with new ew's
     self.odefunc.attention_weights = sampled_attention_weights
 
-  def forward(self, x, splits, predictor, batch_size):
+  def forward(self, x):
     t = self.t.type_as(x)
 
     if self.training:
@@ -228,23 +228,12 @@ class RewireAttODEblock(ODEblock):
           adjoint_atol=self.atol_adjoint,
           adjoint_rtol=self.rtol_adjoint)
     else:
-        if self.opt["no_early"] == True:
-          state_dt = integrator(
-              func, state, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol)
-        else:
-          state_dt = integrator(
-              func, state, t,
-              method=self.opt['method'],
-              options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
-              atol=self.atol,
-              rtol=self.rtol,
-              splits=splits,
-              predictor=predictor,
-              batch_size=batch_size)
+        state_dt = integrator(
+            func, state, t,
+            method=self.opt['method'],
+            options=dict(step_size=self.opt['step_size'], max_iters=self.opt['max_iters']),
+            atol=self.atol,
+            rtol=self.rtol)
 
     if self.training and self.nreg > 0:
       z = state_dt[0][1]

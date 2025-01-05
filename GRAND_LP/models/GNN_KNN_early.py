@@ -25,7 +25,7 @@ class GNNKNNEarly(BaseGNN):
     self.odeblock = block(self.f, self.regularization_fns, opt, data, device, t=time_tensor).to(device)
     # overwrite the test integrator with this custom one
     with torch.no_grad():
-      self.odeblock.test_integrator = EarlyStopInt(self.T, self.opt, self.device)
+      self.odeblock.test_integrator = EarlyStopInt(self.T, self.opt, self.device, self.splits, self.predictor, self.batch_size)
       self.set_solver_data(data)
 
   def set_solver_data(self, data):

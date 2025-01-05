@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from models.base_classes import BaseGNN
 from utils.model_configurations import set_block, set_function
 
-# DONE
 # Define the GNN model.
 class GNN(BaseGNN):
   def __init__(self, opt, data, splits, predictor, batch_size, device=torch.device('cpu')):
@@ -48,7 +47,7 @@ class GNN(BaseGNN):
     if self.training and self.odeblock.nreg > 0:
       z, self.reg_states = self.odeblock(x)
     else:
-      z = self.odeblock(x, self.splits, self.predictor, self.batch_size)
+      z = self.odeblock(x)
 
     if self.opt['augment']:
       z = torch.split(z, x.shape[1] // 2, dim=1)[0]
