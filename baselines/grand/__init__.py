@@ -1,0 +1,1 @@
+# this subfolder should import related files from GRAND and https://github.com/twitter-research/graph-neural-pde?tab=readme-ov-file
