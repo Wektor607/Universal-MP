@@ -36,6 +36,8 @@ class EarlyStopDopri5(RKAdaptiveStepsizeODESolver):
     self.dataset = opt['dataset']
     if opt['dataset'].startswith('ogbl-'):
       self.evaluator = Evaluator(name=opt['dataset'])
+    else:
+      self.evaluator = Evaluator(name='ogbl-collab')
 
   def set_accs(self, train, val, test, time):
     self.best_train = train
@@ -212,6 +214,8 @@ class EarlyStopRK4(FixedGridODESolver):
     self.dataset = opt['dataset']
     if opt['dataset'].startswith('ogbl-'):
       self.evaluator = Evaluator(name=opt['dataset'])
+    else:
+      self.evaluator = Evaluator(name='ogbl-collab')
 
   def _step_func(self, func, t, dt, t1, y):
     ver = torchdiffeq.__version__[0] + torchdiffeq.__version__[2] + torchdiffeq.__version__[4]

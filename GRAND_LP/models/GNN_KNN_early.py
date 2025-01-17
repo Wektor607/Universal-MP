@@ -66,7 +66,7 @@ class GNNKNNEarly(BaseGNN):
 
     if self.opt['augment']:
       z = torch.split(z, x.shape[1] // 2, dim=1)[0]
-
+    
     return z
 
   def forward_encoder(self, x, pos_encoding):
