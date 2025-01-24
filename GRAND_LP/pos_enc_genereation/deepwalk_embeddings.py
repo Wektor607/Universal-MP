@@ -19,7 +19,7 @@ def main(opt):
     dataset_name = opt['dataset']
 
     print(f"[i] Generating embeddings for dataset: {dataset_name}")
-    if dataset_name in ['ogbl-collab']:
+    if dataset_name in ['ogbl-collab', 'ogbl-ddi', 'ogbl-ppa']:
         data, split_edge = my_get_dataset('/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-German/Universal-MP/GRAND_LP/pos_enc_genereation/dataset', opt, dataset_name)
     else:
         dataset = get_dataset(opt, '/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-German/Universal-MP/GRAND_LP/pos_enc_genereation/dataset')
@@ -49,7 +49,7 @@ def main(opt):
     def test():
         model.eval()
         z = model()
-        if dataset_name == 'ogbl-collab':
+        if dataset_name in ['ogbl-collab', 'ogbl-ddi']:
             pos_test_edge = split_edge['test']['edge']
             neg_test_edge = split_edge['test']['edge_neg']
 

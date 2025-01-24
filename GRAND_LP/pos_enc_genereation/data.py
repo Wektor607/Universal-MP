@@ -109,25 +109,6 @@ def my_get_dataset(root: str, opt: dict, name: str, use_valedges_as_input: bool=
     dataset = PygLinkPropPredDataset(name=name)
     split_edge = dataset.get_edge_split()
     data = dataset[0]
-    
-    if name == 'ogbl-collab':
-      num_nodes = data.num_nodes
-      train_edge = split_edge['train']['edge'].t()
-      val_edge = split_edge['valid']['edge'].t()
-      test_edge = split_edge['test']['edge'].t()
-
-      train_mask = torch.zeros(num_nodes, dtype=torch.bool)
-      train_mask[train_edge.unique()] = True
-
-      val_mask = torch.zeros(num_nodes, dtype=torch.bool)
-      val_mask[val_edge.unique()] = True
-
-      test_mask = torch.zeros(num_nodes, dtype=torch.bool)
-      test_mask[test_edge.unique()] = True
-
-      data.train_mask = train_mask
-      data.val_mask = val_mask
-      data.test_mask = test_mask
 
     edge_index = data.edge_index
     data.edge_weight = None 

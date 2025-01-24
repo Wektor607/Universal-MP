@@ -81,6 +81,7 @@ def apply_gdc(data, opt, type="combined"):
     data.num_nodes = data.num_nodes[0]
 
   if type == 'combined':
+    # What is it? #TODO: Understand
     data = gdc(data)
   elif type == 'pos_encoding':
     if opt['pos_enc_orientation'] == "row":  # encode row of S_hat
@@ -380,6 +381,7 @@ class GDCWrapper(GDC):
 
     edge_index, edge_weight = coalesce(edge_index, edge_weight, N, N)
     
+    # TODO: Check diffusion_matrix_exact, diffusion_matrix_approx
     if self.exact:
       edge_index, edge_weight = self.transition_matrix(
         edge_index, edge_weight, N, self.normalization_in)
