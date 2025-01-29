@@ -92,8 +92,8 @@ def main(opt):
     print(f"[i] Final accuracy is {acc}")
     print(f"[i] Embedding shape is {z.data.shape}")
 
-    fname = "DW_%s_emb_%03d_wl_%03d_cs_%02d_wn_%02d_epochs_%03d.pickle" % (
-      opt['dataset'], opt['embedding_dim'], opt['walk_length'], opt['context_size'], opt['walks_per_node'], opt['epochs']
+    fname = "DW_%s_emb_%03d_wl_%03d_cs_%02d_wn_%02d_epochs_%03d_acc_%03%.pickle" % (
+      opt['dataset'], opt['embedding_dim'], opt['walk_length'], opt['context_size'], opt['walks_per_node'], opt['epochs'], acc
     )
 
     save_path = osp.join("/pfs/work7/workspace/scratch/cc7738-kdd25/Universal-German/Universal-MP/GRAND_LP/pos_enc_genereation/dataset/pos_encodings")
@@ -123,7 +123,7 @@ if __name__ == "__main__":
                         help='Walks per node')
   parser.add_argument('--neg_pos_ratio', type=int, default=1, 
                         help='Number of negatives for each positive')
-  parser.add_argument('--epochs', type=int, default=100, 
+  parser.add_argument('--epochs', type=int, default=40, 
                         help='Number of epochs')
   parser.add_argument('--gpu', type=int, default=0, 
                         help='GPU id (default 0)')
