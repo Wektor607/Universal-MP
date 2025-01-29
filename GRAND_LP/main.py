@@ -385,7 +385,7 @@ def print_model_params(model):
       
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')
-    ### MPLP PARAMETERS ###
+    #### MPLP PARAMETERS ####
     # dataset setting
     parser.add_argument('--dataset', type=str, default='ogbl-ppa')
     parser.add_argument('--dataset_dir', type=str, default='./data')
