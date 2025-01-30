@@ -42,12 +42,13 @@ class GraphConvolution(Module):
                + str(self.out_features) + ')'
                
 class GCN(nn.Module):
-    def __init__(self, nfeat, nhid, out_dim, dropout):
+    def __init__(self, nfeat, nhid, out_dim, dropout, device):
         super(GCN, self).__init__()
 
         self.gc1 = GraphConvolution(nfeat, nhid)
         self.gc2 = GraphConvolution(nhid, out_dim)
         self.dropout = dropout
+        self.device = device
 
     def forward(self, x, adj):
         x = F.relu(self.gc1(x, adj))
