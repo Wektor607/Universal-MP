@@ -6,6 +6,7 @@ import time
 from tqdm import tqdm
 
 from metrics.metrics import *
+from data_utils.graph_rewiring import apply_KNN
 from ogb.linkproppred import Evaluator
 from torch.utils.data import DataLoader
 from torch_geometric.utils import negative_sampling
@@ -133,12 +134,6 @@ class Trainer_GRAND:
         pos_test_edge = self.splits['test']['edge'].t().to(self.data.x.device)
         neg_test_edge = self.splits['test']['edge_neg'].t().to(self.data.x.device)
         
-        # pos_train_preds = []
-        # for perm in DataLoader(range(pos_train_edge.size(0)), self.batch_size):
-        #     edge = pos_train_edge[perm].t()
-        #     pos_train_preds += [self.predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-        # pos_train_pred = torch.cat(pos_train_preds, dim=0)
-        
         pos_train_pred = torch.cat([
         self.predictor(h[pos_train_edge[perm].t()[0]], h[pos_train_edge[perm].t()[1]]).squeeze().cpu()
         for perm in PermIterator(pos_train_edge.device,
@@ -146,23 +141,12 @@ class Trainer_GRAND:
         ],
                                 dim=0)
 
-        # pos_valid_preds = []
-        # for perm in DataLoader(range(pos_valid_edge.size(0)), self.batch_size):
-        #     edge = pos_valid_edge[perm].t()
-        #     pos_valid_preds += [self.predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-        # pos_valid_pred = torch.cat(pos_valid_preds, dim=0)
         pos_valid_pred = torch.cat([
         self.predictor(h[pos_valid_edge[perm][0]], h[pos_valid_edge[perm][1]]).squeeze().cpu()
         for perm in PermIterator(pos_valid_edge.device,
                                  pos_valid_edge.shape[0], self.batch_size, False)
         ],
                                 dim=0)
-        
-        # neg_valid_preds = []
-        # for perm in DataLoader(range(neg_valid_edge.size(0)), self.batch_size):
-        #     edge = neg_valid_edge[perm].t()
-        #     neg_valid_preds += [self.predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-        # neg_valid_pred = torch.cat(neg_valid_preds, dim=0)
 
         neg_valid_pred = torch.cat([
         self.predictor(h[neg_valid_edge[perm][0]], h[neg_valid_edge[perm][1]]).squeeze().cpu()
@@ -171,24 +155,12 @@ class Trainer_GRAND:
         ],
                                 dim=0)
         
-        # pos_test_preds = []
-        # for perm in DataLoader(range(pos_test_edge.size(0)), self.batch_size):
-        #     edge = pos_test_edge[perm].t()
-        #     pos_test_preds += [self.predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-        # pos_test_pred = torch.cat(pos_test_preds, dim=0)
-
         pos_test_pred = torch.cat([
         self.predictor(h[pos_test_edge[perm][0]], h[pos_test_edge[perm][1]]).squeeze().cpu()
         for perm in PermIterator(pos_test_edge.device,
                                  pos_test_edge.shape[0], self.batch_size, False)
         ],
                                 dim=0)
-        
-        # neg_test_preds = []
-        # for perm in DataLoader(range(neg_test_edge.size(0)), self.batch_size):
-        #     edge = neg_test_edge[perm].t()
-        #     neg_test_preds += [self.predictor(h[edge[0]], h[edge[1]]).squeeze().cpu()]
-        # neg_test_pred = torch.cat(neg_test_preds, dim=0)
 
         neg_test_pred = torch.cat([
         self.predictor(h[neg_test_edge[perm][0]], h[neg_test_edge[perm][1]]).squeeze().cpu()
@@ -252,6 +224,11 @@ class Trainer_GRAND:
         for epoch in range(1, self.epochs + 1):
             start_time = time.time()
 
+            # CHECK 
+            if self.opt['rewire_KNN'] and epoch % self.opt['rewire_KNN_epoch'] == 0 and epoch != 0:
+                ei = apply_KNN(self.data, self.pos_encoding, self.model, self.opt)
+                self.model.odeblock.odefunc.edge_index = ei
+                
             loss = self.train_epoch()
             
             print(f"Epoch {epoch}, Loss: {loss:.4f}")

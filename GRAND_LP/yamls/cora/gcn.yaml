@@ -15,8 +15,8 @@ cora:
   augment: false
   batch_size: 64
   baseline: false
-  batch_norm: false
-  beltrami: false
+  # batch_norm: false
+  beltrami: True
   beta_dim: sc
   block: attention
   cpus: 1
@@ -49,12 +49,12 @@ cora:
   kinetic_energy: null
   label_rate: 0.5
   leaky_relu_slope: 0.2
-  lr: 0.022924849756740397
+  lr: 0.001 #0.022924849756740397
   max_epochs: 1000
   max_iters: 100
   max_nfe: 2000
-  method: dopri5
-  metric: accuracy
+  method: rk4
+  metric: MRR
   mix_features: false
   mlp_num_layers: 3
   name: cora_beltrami_splits

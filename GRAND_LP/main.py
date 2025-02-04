@@ -282,7 +282,7 @@ if __name__=='__main__':
     batch_size = opt['batch_size']  
     
     if opt['gcn']:
-      model = GCN(data.x.shape[1], opt['hidden_dim'], opt['hidden_dim'], opt['dropout'], device)
+      model = GCN(opt, pos_encoding, data.x.shape[1], opt['hidden_dim'], opt['hidden_dim'], opt['dropout'], device)
     else:
       if opt['rewire_KNN'] or opt['fa_layer']:
         model = GNN_KNN(opt, data, splits, predictor, batch_size, device).to(device) if opt["no_early"] else GNNKNNEarly(opt, data, splits, predictor, batch_size, device).to(device)
