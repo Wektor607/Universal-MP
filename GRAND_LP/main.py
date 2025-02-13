@@ -81,6 +81,18 @@ def print_model_params(model):
     if param.requires_grad:
       print(name)
       print(param.data.shape)
+
+import random
+def set_seed(seed=42):
+    random.seed(seed)  # Фиксируем seed для стандартного random
+    np.random.seed(seed)  # Фиксируем seed для NumPy
+    torch.manual_seed(seed)  # Фиксируем seed для PyTorch (CPU)
+    torch.cuda.manual_seed(seed)  # Фиксируем seed для PyTorch (GPU)
+    torch.cuda.manual_seed_all(seed)  # Фиксируем seed для всех GPU
+    torch.backends.cudnn.deterministic = True  # Опционально: делаем вычисления детерминированными
+    torch.backends.cudnn.benchmark = False  # Отключаем автооптимизации для детерминированности
+
+set_seed(42)
       
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='OGBL-DDI (GNN)')

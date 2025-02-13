@@ -8,7 +8,6 @@ from tqdm import tqdm
 from metrics.metrics import *
 from data_utils.graph_rewiring import apply_KNN
 from ogb.linkproppred import Evaluator
-from torch.utils.data import DataLoader
 from torch_geometric.utils import negative_sampling
 from utils.utils import PermIterator
 class Trainer_GRAND:
@@ -49,35 +48,38 @@ class Trainer_GRAND:
         
         pos_encoding = self.pos_encoding.to(self.model.device) if self.pos_encoding is not None else None
         
-        pos_train_edge = self.splits['train']['edge'].t().to(self.data.x.device)
-        neg_edge = negative_sampling(self.data.edge_index.to(pos_train_edge.device), 
-                                     self.data.adj_t.sizes()[0]).to(self.data.x.device)
+        pos_train_edge = self.splits['train']['edge'].to(self.data.x.device)
         
+        pos_train_edge_t = pos_train_edge.t()  # (2, E)
+        neg_train_edge_t = negative_sampling(
+            pos_train_edge_t,
+            num_nodes=self.data.num_nodes,
+            num_neg_samples=pos_train_edge.size(0)
+        ).to(self.data.x.device)  # (2, E)
+
+        # (E, 2)
+        neg_train_edge = neg_train_edge_t.t()
         total_loss = total_examples = 0
         
-        adjmask = torch.ones_like(pos_train_edge[0], dtype=torch.bool) # mask for adj
-        pos_weight = 1.0
-        neg_weight = pos_train_edge.size(1) / neg_edge.size(1)
-        for perm in PermIterator(adjmask.device, adjmask.shape[0], self.batch_size):
-            self.optimizer.zero_grad()
+        if self.opt['gcn']:
+            h = self.model(self.data.x, self.data.adj_t.to_torch_sparse_coo_tensor())
+        else:
+            h = self.model(self.data.x, pos_encoding)
+        
+        indices = torch.randperm(pos_train_edge.size(0), device=pos_train_edge.device)
 
-            if self.opt['gcn']:
-                h = self.model(self.data.x, self.data.adj_t.to_torch_sparse_coo_tensor())
-            else:
-                h = self.model(self.data.x, pos_encoding)
+        self.optimizer.zero_grad()
+        for start in range(0, pos_train_edge.size(0), self.batch_size):
+            end = start + self.batch_size
+            perm = indices[start:end]
             
-            edge = pos_train_edge[:, perm].to(self.device)
-            
-            pos_out = self.predictor(h[edge[0]], h[edge[1]])
+            pos_out = self.predictor(h[pos_train_edge[perm, 0]], h[pos_train_edge[perm, 1]])
 
             pos_loss = -torch.log(pos_out + 1e-15).mean()
             
-            edge = neg_edge[:, perm]
-            neg_out = self.predictor(h[edge[0]], h[edge[1]])
+            neg_out = self.predictor(h[neg_train_edge[perm, 0]], h[neg_train_edge[perm, 1]])
             neg_loss = -torch.log(1 - neg_out + 1e-15).mean()
             
-            # TODO: Think about it
-            # loss = pos_weight * pos_loss + neg_weight * neg_loss
             loss = pos_loss + neg_loss
             
             if self.opt['gcn'] == False:
@@ -89,27 +91,24 @@ class Trainer_GRAND:
                         reg_state * coeff for reg_state, coeff in zip(reg_states, regularization_coeffs) if coeff != 0
                     )
                     loss = loss + reg_loss
-
-            # Update parameters
-            if self.opt['gcn'] == False:
-                self.model.fm.update(self.model.getNFE())
-                self.model.resetNFE()
-            loss.backward()
             
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-            torch.nn.utils.clip_grad_norm_(self.predictor.parameters(), 1.0)
-
-            self.optimizer.step()
-            if self.opt['gcn'] == False:
-                self.model.bm.update(self.model.getNFE())
-                self.model.resetNFE()
-            
-            num_examples = pos_out.size(0)
+            num_examples = (end - start)
             total_loss += loss.item() * num_examples
             total_examples += num_examples
 
-            # Update progress bar description with current loss
-            # pbar.set_postfix({"Loss": loss.item()})
+        # Update parameters
+        if self.opt['gcn'] == False:
+            self.model.fm.update(self.model.getNFE())
+            self.model.resetNFE()
+        loss.backward()
+        
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.predictor.parameters(), 1.0)
+
+        self.optimizer.step()
+        if self.opt['gcn'] == False:
+            self.model.bm.update(self.model.getNFE())
+            self.model.resetNFE()
 
         return total_loss / total_examples
     
@@ -128,42 +127,42 @@ class Trainer_GRAND:
         else:
             h = self.model(self.data.x, self.pos_encoding)
         
-        pos_train_edge = self.splits['train']['edge'].t().to(self.data.x.device)
-        pos_valid_edge = self.splits['valid']['edge'].t().to(self.data.x.device)
-        neg_valid_edge = self.splits['valid']['edge_neg'].t().to(self.data.x.device)
-        pos_test_edge = self.splits['test']['edge'].t().to(self.data.x.device)
-        neg_test_edge = self.splits['test']['edge_neg'].t().to(self.data.x.device)
+        pos_train_edge = self.splits['train']['edge'].to(self.data.x.device)
+        pos_valid_edge = self.splits['valid']['edge'].to(self.data.x.device)
+        neg_valid_edge = self.splits['valid']['edge_neg'].to(self.data.x.device)
+        pos_test_edge = self.splits['test']['edge'].to(self.data.x.device)
+        neg_test_edge = self.splits['test']['edge_neg'].to(self.data.x.device)
         
         pos_train_pred = torch.cat([
-        self.predictor(h[pos_train_edge[perm].t()[0]], h[pos_train_edge[perm].t()[1]]).squeeze().cpu()
+        self.predictor(h[pos_train_edge[perm, 0]], h[pos_train_edge[perm, 1]]).squeeze().cpu()
         for perm in PermIterator(pos_train_edge.device,
                                  pos_train_edge.shape[0], self.batch_size, False)
         ],
                                 dim=0)
 
         pos_valid_pred = torch.cat([
-        self.predictor(h[pos_valid_edge[perm][0]], h[pos_valid_edge[perm][1]]).squeeze().cpu()
+        self.predictor(h[pos_valid_edge[perm, 0]], h[pos_valid_edge[perm, 1]]).squeeze().cpu()
         for perm in PermIterator(pos_valid_edge.device,
                                  pos_valid_edge.shape[0], self.batch_size, False)
         ],
                                 dim=0)
 
         neg_valid_pred = torch.cat([
-        self.predictor(h[neg_valid_edge[perm][0]], h[neg_valid_edge[perm][1]]).squeeze().cpu()
+        self.predictor(h[neg_valid_edge[perm, 0]], h[neg_valid_edge[perm, 1]]).squeeze().cpu()
         for perm in PermIterator(neg_valid_edge.device,
                                  neg_valid_edge.shape[0], self.batch_size, False)
         ],
                                 dim=0)
         
         pos_test_pred = torch.cat([
-        self.predictor(h[pos_test_edge[perm][0]], h[pos_test_edge[perm][1]]).squeeze().cpu()
+        self.predictor(h[pos_test_edge[perm, 0]], h[pos_test_edge[perm, 1]]).squeeze().cpu()
         for perm in PermIterator(pos_test_edge.device,
                                  pos_test_edge.shape[0], self.batch_size, False)
         ],
                                 dim=0)
 
         neg_test_pred = torch.cat([
-        self.predictor(h[neg_test_edge[perm][0]], h[neg_test_edge[perm][1]]).squeeze().cpu()
+        self.predictor(h[neg_test_edge[perm, 0]], h[neg_test_edge[perm, 1]]).squeeze().cpu()
         for perm in PermIterator(neg_test_edge.device,
                                  neg_test_edge.shape[0], self.batch_size, False)
         ],
