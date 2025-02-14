@@ -303,7 +303,10 @@ if __name__=='__main__':
         model = GNN(opt, data, splits, predictor, batch_size, device).to(device) if opt["no_early"] else GNNEarly(opt, data, splits, predictor, batch_size, device).to(device)
 
     
-    parameters = [p for p in model.parameters() if p.requires_grad]
+    parameters = (
+      [p for p in model.parameters() if p.requires_grad] +
+      [p for p in predictor.parameters() if p.requires_grad]
+    )
     optimizer = get_optimizer(opt['optimizer'], parameters, lr=opt['lr'], weight_decay=opt['decay'])
     
     trainer = Trainer_GRAND(

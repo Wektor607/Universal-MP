@@ -32,10 +32,10 @@ class Trainer_GRAND:
         self.batch_size = batch_size
         self.device = device
         self.epochs = opt['epoch']
-        self.batch_size = self.opt['batch_size']
+        self.batch_size = opt['batch_size']
         self.log_dir = log_dir
 
-        self.results_file = os.path.join(log_dir, 'results.txt')
+        self.results_file = os.path.join(log_dir, f"{opt['dataset']}_results.txt")
         os.makedirs(log_dir, exist_ok=True)
 
         self.best_epoch = 0
@@ -50,26 +50,23 @@ class Trainer_GRAND:
         
         pos_train_edge = self.splits['train']['edge'].to(self.data.x.device)
         
-        pos_train_edge_t = pos_train_edge.t()  # (2, E)
-        neg_train_edge_t = negative_sampling(
-            pos_train_edge_t,
+        neg_train_edge = negative_sampling(
+            self.data.edge_index.to(pos_train_edge.device),
             num_nodes=self.data.num_nodes,
             num_neg_samples=pos_train_edge.size(0)
-        ).to(self.data.x.device)  # (2, E)
+        ).t().to(self.data.x.device)
 
-        # (E, 2)
-        neg_train_edge = neg_train_edge_t.t()
         total_loss = total_examples = 0
-        
-        if self.opt['gcn']:
-            h = self.model(self.data.x, self.data.adj_t.to_torch_sparse_coo_tensor())
-        else:
-            h = self.model(self.data.x, pos_encoding)
         
         indices = torch.randperm(pos_train_edge.size(0), device=pos_train_edge.device)
 
-        self.optimizer.zero_grad()
         for start in range(0, pos_train_edge.size(0), self.batch_size):
+            self.optimizer.zero_grad()
+            if self.opt['gcn']:
+                h = self.model(self.data.x, self.data.adj_t.to_torch_sparse_coo_tensor())
+            else:
+                h = self.model(self.data.x, pos_encoding)
+            
             end = start + self.batch_size
             perm = indices[start:end]
             
@@ -96,19 +93,19 @@ class Trainer_GRAND:
             total_loss += loss.item() * num_examples
             total_examples += num_examples
 
-        # Update parameters
-        if self.opt['gcn'] == False:
-            self.model.fm.update(self.model.getNFE())
-            self.model.resetNFE()
-        loss.backward()
-        
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-        torch.nn.utils.clip_grad_norm_(self.predictor.parameters(), 1.0)
+            # Update parameters
+            if self.opt['gcn'] == False:
+                self.model.fm.update(self.model.getNFE())
+                self.model.resetNFE()
+            loss.backward()
+            
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(self.predictor.parameters(), 1.0)
 
-        self.optimizer.step()
-        if self.opt['gcn'] == False:
-            self.model.bm.update(self.model.getNFE())
-            self.model.resetNFE()
+            self.optimizer.step()
+            if self.opt['gcn'] == False:
+                self.model.bm.update(self.model.getNFE())
+                self.model.resetNFE()
 
         return total_loss / total_examples
     
@@ -168,6 +165,10 @@ class Trainer_GRAND:
         ],
                                 dim=0)
         
+        print(pos_test_pred.mean())
+        print(neg_test_pred.mean())
+        top_neg = neg_test_pred.topk(50)  
+        print("Highest 50 negative preds:", top_neg.values)
         results = {}
         for K in [1, 3, 10, 20, 50, 100]:
             evaluator.K = K
@@ -186,10 +187,30 @@ class Trainer_GRAND:
 
             results[f'Hits@{K}'] = (train_hits, valid_hits, test_hits)
         
-        print(f"Shape of pos_val_pred: {pos_test_pred.shape}")
-        print(f"Shape of neg_val_pred: {neg_test_pred.shape}")
+        # pos_test_pred, neg_test_pred - ваши тензоры
+        print("pos_test_pred shape:", pos_test_pred.shape)
+        print("neg_test_pred shape:", neg_test_pred.shape)
 
-        result_mrr_test = evaluate_mrr(pos_test_pred, neg_test_pred, self.opt)  
+        # Проверяем на NaN, +/- Inf
+        if torch.isnan(pos_test_pred).any():
+            print("Warning: pos_test_pred has NaNs!")
+        if torch.isinf(pos_test_pred).any():
+            print("Warning: pos_test_pred has Inf!")
+
+        if torch.isnan(neg_test_pred).any():
+            print("Warning: neg_test_pred has NaNs!")
+        if torch.isinf(neg_test_pred).any():
+            print("Warning: neg_test_pred has Inf!")
+
+        # Дополнительно можно проверить min/max
+        print("pos_test_pred min:", pos_test_pred.min().item(),
+            "max:", pos_test_pred.max().item(),
+            "mean:", pos_test_pred.mean().item())
+        print("neg_test_pred min:", neg_test_pred.min().item(),
+            "max:", neg_test_pred.max().item(),
+            "mean:", neg_test_pred.mean().item())
+
+        result_mrr_test = evaluate_mrr(pos_test_pred, neg_test_pred.repeat(pos_test_pred.size(0), 1), self.opt)  
         
         for name in ['MRR', 'mrr_hit1', 'mrr_hit3', 'mrr_hit10', 'mrr_hit20', 'mrr_hit50', 'mrr_hit100']:
             results[name] = (result_mrr_test[name])
