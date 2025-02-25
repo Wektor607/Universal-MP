@@ -19,7 +19,6 @@ import os
 import pickle
 from metrics.distances_kNN import apply_dist_KNN, apply_dist_threshold, get_distances, apply_feat_KNN
 from metrics.hyperbolic_distances import hyperbolize
-
 ### for custom GDC
 import torch
 import numba
@@ -70,13 +69,13 @@ def apply_gdc(data, opt, type="combined"):
                      normalization_in='sym',
                      normalization_out='col',
                      diffusion_kwargs=diff_args,
-                     sparsification_kwargs=sparse_args, exact=opt['exact'])
+                     sparsification_kwargs=sparse_args, exact=opt['exact'], dataset_name=opt['dataset'])
   else:
     gdc = GDCWrapper(self_loop_weight=None,
                      normalization_in='sym',
                      normalization_out='col',
                      diffusion_kwargs=diff_args,
-                     sparsification_kwargs=sparse_args, exact=opt['exact'])
+                     sparsification_kwargs=sparse_args, exact=opt['exact'], dataset_name=opt['dataset'])
   if isinstance(data.num_nodes, list):
     data.num_nodes = data.num_nodes[0]
 
@@ -281,7 +280,6 @@ def apply_beltrami(data, opt, data_dir=f'{ROOT_DIR}/dataset'):
 
     with open(fname, "wb") as f:
       pickle.dump(pos_encoding, f)
-
   return pos_encoding
 
 
@@ -350,7 +348,7 @@ class GDCWrapper(GDC):
                normalization_out='col',
                diffusion_kwargs=dict(method='ppr', alpha=0.15),
                sparsification_kwargs=dict(method='threshold',
-                                          avg_degree=64), exact=True):
+                                          avg_degree=64), exact=True, dataset_name=''):
     super(GDCWrapper, self).__init__(self_loop_weight, normalization_in, normalization_out, diffusion_kwargs,
                               sparsification_kwargs, exact)
     self.self_loop_weight = self_loop_weight
@@ -359,6 +357,7 @@ class GDCWrapper(GDC):
     self.diffusion_kwargs = diffusion_kwargs
     self.sparsification_kwargs = sparsification_kwargs
     self.exact = exact
+    self.dataset_name = dataset_name
 
     if self_loop_weight:
       assert exact or self_loop_weight == 1
@@ -400,6 +399,15 @@ class GDCWrapper(GDC):
     edge_index, edge_weight = coalesce(edge_index, edge_weight, N, N)
     edge_index, edge_weight = self.transition_matrix(
       edge_index, edge_weight, N, self.normalization_out)
-
-    return to_dense_adj(edge_index,
-                        edge_attr=edge_weight).squeeze()
+    
+    if self.dataset_name in ['ogbl-collab', 'ogbl-ppa', 'ogbl-citation2']:
+      from torch_sparse import SparseTensor
+      return SparseTensor(row=edge_index[0], col=edge_index[1], 
+                        value=edge_weight, sparse_sizes=(N, N))
+    else:
+      return to_dense_adj(edge_index,
+                          edge_attr=edge_weight).squeeze()
+      
+      
+      
+      
