@@ -1,4 +1,4 @@
-ogbl-collab:
+ogbl-citation2:
   # M_nodes: 64
   # adaptive: false
   add_source: false
@@ -20,7 +20,7 @@ ogbl-collab:
   block: hard_attention
   # cpus: 1
   data_norm: rw
-  dataset: ogbl-collab
+  dataset: ogbl-citation2
   decay: 0.001 ###################
   directional_penalty: null
   dropout: 0.3 #######################
@@ -65,8 +65,8 @@ ogbl-collab:
   # patience: 100
   pos_enc_hidden_dim: 64
   pos_enc_orientation: row ###################
-  pos_enc_type: GDC #DW128
-  ppr_alpha: 0.01
+  pos_enc_type: GDC
+  ppr_alpha: 0.05
   # reduction_factor: 10
   # regularise: false
   reweight_attention: false

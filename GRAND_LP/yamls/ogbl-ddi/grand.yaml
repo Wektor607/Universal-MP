@@ -68,7 +68,7 @@ ogbl-ddi:
   patience: 100
   pos_enc_hidden_dim: 64
   pos_enc_orientation: row
-  pos_enc_type: DW128
+  pos_enc_type: GDC
   ppr_alpha: 0.05
   reduction_factor: 10
   regularise: false
@@ -104,3 +104,4 @@ ogbl-ddi:
   mlp_num_layers: 3
   no_early: true
   use_valedges_as_input: false
+  pos_enc_csv: false

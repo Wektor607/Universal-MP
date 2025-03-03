@@ -1,80 +1,77 @@
-citeseer:
+ogbl-collab:
   M_nodes: 64
   adaptive: False
-  add_source: True
-  adjoint: False
-  adjoint_method: adaptive_heun
+  add_source: False
+  adjoint: True
+  adjoint_method: rk4
   adjoint_step_size: 1
   alpha: 1.0
   alpha_dim: sc
-  att_samp_pct: 1
+  att_samp_pct: 0.8105268910037231
   attention_dim: 32
-  attention_norm_idx: 0
+  attention_norm_idx: 1
   attention_rewiring: False
-  attention_type: exp_kernel
+  attention_type: scaled_dot
   augment: False
   baseline: False
-  batch_norm: False
+  batch_norm: True
   beltrami: True
   beta_dim: sc
-  block: attention
+  block: hard_attention
   cpus: 1
   data_norm: rw
-  dataset: Citeseer
-  decay: 0.1
+  dataset: ogbl-collab
+  decay: 0
   directional_penalty: None
-  dropout: 0.7488085003122172
+  dropout: 0.3
   dt: 0.001
   dt_min: 1.0e-05
-  epoch: 250
-  exact: True
+  epoch: 200
+  exact: False
   fc_out: False
   feat_hidden_dim: 64
   function: laplacian
   gdc_avg_degree: 64
-  gdc_k: 128
+  gdc_k: 64
   gdc_method: ppr
   gdc_sparsification: topk
   gdc_threshold: 0.01
   gpus: 1.0
   grace_period: 20
-  heads: 8
+  heads: 2
   heat_time: 3.0
-  hidden_dim: 1500
-  input_dropout: 0.6803233752085334
+  hidden_dim: 128
+  input_dropout: 0
   jacobian_norm2: None
-  kinetic_energy: None
-  label_rate: 0.5
-  leaky_relu_slope: 0.5825086997804176
-  lr: 0.00863585231323069
+  kinetic_energy: True
+  label_rate: 0.21964773835397075
+  leaky_relu_slope: 0.2
+  lr: 0.003
   max_epochs: 1000
   max_iters: 100
-  max_nfe: 3000
+  max_nfe: 500
   method: rk4
   metric: MRR
   mix_features: False
-  name: Citeseer_beltrami_1_KNN
+  name: collab_beltrami_hard_att
   new_edges: random
   no_alpha_sigmoid: False
-  not_lcc: True
-  num_class: 6
-  num_feature: 3703
+  not_lcc: False
   num_init: 2
-  num_nodes: 2120
-  num_samples: 400
+  num_samples: 200
   num_splits: 1
   ode_blocks: 1
-  optimizer: adamax
+  optimizer: rmsprop
   patience: 100
-  pos_enc_dim: row
-  pos_enc_hidden_dim: 16
-  pos_enc_orientation: row ##################
-  pos_enc_type: GDC
+  pos_enc_hidden_dim: 64
+  pos_enc_orientation: row
+  pos_enc_type: DW128
   ppr_alpha: 0.05
-  reduction_factor: 4
+  reduction_factor: 10
   regularise: False
   reweight_attention: False
   rewire_KNN: False
+  rewire_KNN_T: T0
   rewire_KNN_epoch: 10
   rewire_KNN_k: 64
   rewire_KNN_sym: False
@@ -83,13 +80,13 @@ citeseer:
   rw_rmvR: 0.02
   self_loop_weight: 1
   sparsify: S_hat
-  square_plus: True
+  square_plus: False
   step_size: 1
   threshold_type: addD_rvR
-  time: 7.874113442879092
-  tol_scale: 2.9010446330432815
+  time: 3.6760155951687636
+  tol_scale: 11353.558848254957
   tol_scale_adjoint: 1.0
-  total_deriv: directional_derivative
+  total_deriv: None
   use_cora_defaults: False
   use_flux: False
   use_labels: False
@@ -97,11 +94,10 @@ citeseer:
   use_mlp: False
 
   # Additional hyperparameters
-  batch_size: 16
+  batch_size: 8192
   dataset_dir: ./dataset
   fa_layer: false
-  gcn: false
+  gcn: true
   mlp_num_layers: 3
   no_early: true
   use_valedges_as_input: false
-  pos_enc_csv: False

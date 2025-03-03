@@ -285,7 +285,10 @@ if __name__=='__main__':
 
     if opt['beltrami']:
       pos_encoding = apply_beltrami(data.to('cpu'), opt).to(device)
-      opt['pos_enc_dim'] = pos_encoding.shape[1]
+      if opt['dataset'] in ['ogbl-ppa', 'ogbl-citation2']:
+        opt['pos_enc_dim'] = pos_encoding.sizes()[1]
+      else:
+        opt['pos_enc_dim'] = pos_encoding.shape[1]
     else:
       pos_encoding = None
     
